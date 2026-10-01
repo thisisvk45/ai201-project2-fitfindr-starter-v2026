@@ -138,6 +138,20 @@ $5`. It returned an error message that suggests broadening the description,
 changing the size, or raising the price limit. Its selected item, outfit
 suggestion, and fit card remained `None`.
 
+## Stretch Features
+
+I declared these three before I built them.
+
+1. **A fourth tool, `compare_price`.** It compares the selected listing's price
+   with the other listings in the same category and returns the median, the
+   lowest price and a verdict.
+2. **A second branch.** If `compare_price` says the first pick is above typical
+   for its category and the user gave no price limit, the loop searches again
+   with the category median as the limit and switches to a cheaper result in
+   the same category. If there is none, it keeps the first pick.
+3. **Style memory.** With `--remember`, the agent saves each item it picks to a
+   local file and adds saved items to the wardrobe on the next run.
+
 ## How I Used AI
 
 ### Moment 1
