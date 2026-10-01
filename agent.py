@@ -17,7 +17,7 @@ import re
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card
+from tools import search_listings, suggest_outfit, create_fit_card, compare_price
 from generate import ModelUnavailable
 
 
@@ -47,6 +47,9 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
         "error": None,               # set when the run ended early
+        "price_check": None,         # compare_price result for the final pick
+        "price_branch": None,        # what the second branch did, if it ran
+        "original_pick": None,       # first pick, kept when the branch switches
     }
 
 
@@ -131,6 +134,35 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                 return session
 
             session["selected_item"] = session["search_results"][0]
+            next_step = "compare_price"
+            continue
+
+        if next_step == "compare_price":
+            pick = session["selected_item"]
+            session["price_check"] = compare_price(pick)
+
+            # Second branch: the first pick is above typical for its category
+            # and the user set no price limit, so look for a cheaper match.
+            if (
+                session["price_check"]["verdict"] == "above typical"
+                and session["parsed"]["max_price"] is None
+            ):
+                cheaper = [
+                    item for item in search_listings(
+                        session["parsed"]["description"],
+                        session["parsed"]["size"],
+                        session["price_check"]["median_price"],
+                    )
+                    if item["category"] == pick["category"] and item["id"] != pick["id"]
+                ]
+                if cheaper:
+                    session["original_pick"] = pick
+                    session["selected_item"] = cheaper[0]
+                    session["price_check"] = compare_price(cheaper[0])
+                    session["price_branch"] = "switched to a cheaper pick"
+                else:
+                    session["price_branch"] = "no cheaper match, kept the first pick"
+
             next_step = "suggest_outfit"
             continue
 
