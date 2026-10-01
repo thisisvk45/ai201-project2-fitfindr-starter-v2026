@@ -13,6 +13,8 @@ Build and test your three tools in `tools.py` first. Then come here.
     python agent.py          runs both example paths below
 """
 
+import re
+
 import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card
@@ -40,6 +42,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "parsed": {},                # description / size / max_price you pulled out of it
         "search_results": [],        # everything search_listings returned
         "selected_item": None,       # the one you chose — goes into suggest_outfit
+        "outfit_input_item": None,   # exact item supplied to suggest_outfit
         "wardrobe": wardrobe,        # the user's wardrobe
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
@@ -106,10 +109,75 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         than a stack trace. The import is already at the top of this file.
     """
     session = new_session(query, wardrobe)
+    session["parsed"] = _parse_query(query)
 
-    # TODO: delete these two lines and build the loop.
-    session["error"] = "The planning loop isn't built yet — see the TODO in agent.py."
+    next_step = "search"
+    iterations = 0
+    while next_step:
+        iterations += 1
+        trace.check_iterations(iterations)
+
+        if next_step == "search":
+            parsed = session["parsed"]
+            session["search_results"] = search_listings(
+                parsed["description"], parsed["size"], parsed["max_price"]
+            )
+
+            if not session["search_results"]:
+                session["error"] = (
+                    "I couldn't find a listing that fits those details. Try broadening "
+                    "the description, choosing another size, or raising the price limit."
+                )
+                return session
+
+            session["selected_item"] = session["search_results"][0]
+            next_step = "suggest_outfit"
+            continue
+
+        if next_step == "suggest_outfit":
+            session["outfit_input_item"] = session["selected_item"]
+            session["outfit_suggestion"] = suggest_outfit(
+                session["outfit_input_item"], session["wardrobe"]
+            )
+            next_step = "create_fit_card"
+            continue
+
+        if next_step == "create_fit_card":
+            session["fit_card"] = create_fit_card(
+                session["outfit_suggestion"], session["selected_item"]
+            )
+            next_step = None
+
     return session
+
+
+def _parse_query(query: str) -> dict:
+    """Extract the supported structured filters without asking the user twice.
+
+    A small regex parser is deliberate here: price and size have clear forms in
+    the supplied CLI examples, so model parsing would spend an extra call and
+    make the deterministic search branch harder to test.
+    """
+    normalized = " ".join(query.strip().split())
+    price_match = re.search(r"\bunder\s*\$?\s*(\d+(?:\.\d+)?)\b", normalized, re.I)
+    size_match = re.search(
+        r"\b(?:in\s+)?size\s+(XXS|XS|S|M|L|XL|XXL|\d+(?:\.\d+)?|W\d+)\b",
+        normalized,
+        re.I,
+    )
+
+    description = normalized
+    if price_match:
+        description = description.replace(price_match.group(0), " ")
+    if size_match:
+        description = description.replace(size_match.group(0), " ")
+    description = " ".join(description.split()) or normalized
+
+    return {
+        "description": description,
+        "size": size_match.group(1).upper() if size_match else None,
+        "max_price": float(price_match.group(1)) if price_match else None,
+    }
 
 
 # ── running it directly ───────────────────────────────────────────────────────
