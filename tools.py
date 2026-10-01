@@ -9,6 +9,7 @@ can't tell which layer is lying to you.
     search_listings(description, size, max_price)  → list[dict]
     suggest_outfit(new_item, wardrobe)             → str
     create_fit_card(outfit, new_item)              → str
+    compare_price(new_item)                        → dict   (stretch)
 
 All three are stubs right now. They run and they do nothing — that's the
 starting position and it's deliberate.
@@ -21,6 +22,7 @@ the description has to say what is *in* the list.
 """
 
 import re
+import statistics
 
 import config
 from generate import generate
@@ -208,6 +210,63 @@ Outfit idea:
 Return only the caption."""
     response = generate(prompt).strip()
     return response or "I found the item, but could not generate a fit card yet."
+
+
+# ── Tool 4 (stretch): compare_price ─────────────────────────────────────────
+
+# A pick is "above typical" when it costs more than 1.2 times the median price
+# of the other listings in its category, and "below typical" under 0.8 times.
+PRICE_ABOVE_RATIO = 1.2
+PRICE_BELOW_RATIO = 0.8
+
+
+def compare_price(new_item: dict) -> dict:
+    """
+    Compare one listing's price with the other listings in the same category.
+
+    Deterministic, no model call.
+
+    Args:
+        new_item: a listing dict with at least id, category and price.
+
+    Returns:
+        A dict with item_id (str), item_price (float), category (str),
+        compared_count (int), median_price (float | None),
+        lowest_price (float | None) and verdict (str): one of
+        "below typical", "typical", "above typical" or "no comparison".
+
+    When it has nothing: if no other listing shares the category, it returns
+    compared_count 0, median_price and lowest_price None, and the verdict
+    "no comparison".
+    """
+    others = [
+        listing["price"] for listing in load_listings()
+        if listing["category"] == new_item.get("category")
+        and listing["id"] != new_item.get("id")
+    ]
+    result = {
+        "item_id": new_item.get("id"),
+        "item_price": float(new_item.get("price", 0)),
+        "category": new_item.get("category"),
+        "compared_count": len(others),
+        "median_price": None,
+        "lowest_price": None,
+        "verdict": "no comparison",
+    }
+    if not others:
+        return result
+
+    median = float(statistics.median(others))
+    result["median_price"] = median
+    result["lowest_price"] = float(min(others))
+    price = result["item_price"]
+    if price > median * PRICE_ABOVE_RATIO:
+        result["verdict"] = "above typical"
+    elif price < median * PRICE_BELOW_RATIO:
+        result["verdict"] = "below typical"
+    else:
+        result["verdict"] = "typical"
+    return result
 
 
 # ── Search helpers ───────────────────────────────────────────────────────────
