@@ -20,7 +20,9 @@ That last line is what your loop branches on. "Returns a list" earns nothing —
 the description has to say what is *in* the list.
 """
 
-import config  # noqa: F401 — you'll use this in search_listings
+import re
+
+import config
 from generate import generate
 from utils.data_loader import load_listings
 
@@ -78,8 +80,24 @@ def search_listings(
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
-    # TODO: replace this with your implementation
-    return []
+    requested_terms = _terms(description)
+    ranked: list[tuple[int, dict]] = []
+
+    for listing in load_listings():
+        if max_price is not None and listing["price"] > max_price:
+            continue
+        if size and not _size_matches(size, listing["size"]):
+            continue
+
+        searchable = _listing_text(listing)
+        matches = sum(term in searchable for term in requested_terms)
+        exact_phrase = " ".join(requested_terms) in searchable
+        score = matches + (3 if exact_phrase and requested_terms else 0)
+        if score:
+            ranked.append((score, listing))
+
+    ranked.sort(key=lambda result: (-result[0], result[1]["price"], result[1]["id"]))
+    return [listing for _, listing in ranked[: config.SEARCH_RESULT_LIMIT]]
 
 
 # ── Tool 2: suggest_outfit ────────────────────────────────────────────────────
@@ -112,8 +130,32 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    item_summary = _item_summary(new_item)
+    wardrobe_items = wardrobe.get("items", [])
+
+    if wardrobe_items:
+        closet = "\n".join(
+            f"- {item.get('name', 'unnamed item')} "
+            f"({item.get('category', 'unknown category')}; "
+            f"colors: {', '.join(item.get('colors', []))}; "
+            f"tags: {', '.join(item.get('style_tags', []))})"
+            for item in wardrobe_items
+        )
+        prompt = f"""You are a practical personal stylist. Suggest one or two outfits around this potential thrift find:
+{item_summary}
+
+The user already owns:
+{closet}
+
+Name the exact wardrobe pieces that work with the find. Keep the answer under 120 words and do not invent items."""
+    else:
+        prompt = f"""You are a practical personal stylist. Give one or two general styling ideas for this potential thrift find:
+{item_summary}
+
+The user has not listed any wardrobe items, so do not claim they own specific pieces. Suggest broadly available pairings. Keep the answer under 120 words."""
+
+    response = generate(prompt).strip()
+    return response or "No outfit suggestion was returned. Try the item again."
 
 
 # ── Tool 3: create_fit_card ───────────────────────────────────────────────────
@@ -152,5 +194,85 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
     """
-    # TODO: replace this with your implementation
-    return ""
+    if not outfit or not outfit.strip():
+        return "I need an outfit suggestion before I can make a fit card."
+
+    prompt = f"""Write a natural, two-to-four sentence thrift-find caption. It must mention the item's title, exact price, and platform once each. Keep the tone specific and postable, not salesy.
+
+Item:
+{_item_summary(new_item)}
+
+Outfit idea:
+{outfit.strip()}
+
+Return only the caption."""
+    response = generate(prompt).strip()
+    return response or "I found the item, but could not generate a fit card yet."
+
+
+# ── Search helpers ───────────────────────────────────────────────────────────
+
+_STOP_WORDS = {
+    "a", "an", "and", "for", "in", "looking", "of", "on", "the", "to",
+    "under", "want", "with",
+}
+
+
+def _terms(text: str) -> list[str]:
+    """Lowercase searchable words, preserving useful terms such as ``90s``."""
+    return [
+        word for word in re.findall(r"[a-z0-9]+", text.lower())
+        if word not in _STOP_WORDS
+    ]
+
+
+def _listing_text(listing: dict) -> str:
+    """The fields a buyer can reasonably expect a text search to use."""
+    values = [
+        listing.get("title", ""),
+        listing.get("description", ""),
+        listing.get("category", ""),
+        listing.get("brand") or "",
+        *listing.get("style_tags", []),
+        *listing.get("colors", []),
+    ]
+    return " ".join(str(value).lower() for value in values)
+
+
+def _size_matches(requested: str, available: str) -> bool:
+    """Match apparel, waist, and shoe sizes without substring false positives."""
+    wanted = requested.strip().upper().replace(" ", "")
+    offered = available.strip().upper()
+    offered_compact = offered.replace(" ", "")
+    if not wanted:
+        return True
+
+    # Shoe sizes: ``8`` is a match for ``US 8``, but not ``US 8.5``.
+    if re.fullmatch(r"\d+(?:\.\d+)?", wanted):
+        number = re.escape(wanted)
+        return bool(re.search(rf"(?:US\s*)?{number}(?![\d.])", offered))
+
+    # Waist/inseam requests are written in the data as W30, W28, and so on.
+    if re.fullmatch(r"W\d+", wanted):
+        return bool(re.search(rf"{re.escape(wanted)}(?!\d)", offered_compact))
+
+    # S/M and M/L are ranges; extract only clothing-size tokens so ``S`` does
+    # not accidentally match the S in ``US 9`` or in ``oversized``.
+    if wanted in {"XXS", "XS", "S", "M", "L", "XL", "XXL"}:
+        clothing_sizes = re.findall(r"(?<![A-Z])(XXL|XXS|XL|XS|S|M|L)(?![A-Z])", offered)
+        return wanted in clothing_sizes
+
+    return wanted == offered_compact
+
+
+def _item_summary(item: dict) -> str:
+    """A stable, complete listing description for the two model prompts."""
+    brand = item.get("brand") or "unbranded"
+    return (
+        f"{item.get('title', 'Unnamed item')} — ${item.get('price', 'unknown')} "
+        f"on {item.get('platform', 'unknown platform')}; size {item.get('size', 'unknown')}; "
+        f"{item.get('condition', 'unknown')} condition; brand: {brand}; "
+        f"colors: {', '.join(item.get('colors', []))}; "
+        f"tags: {', '.join(item.get('style_tags', []))}. "
+        f"Description: {item.get('description', '')}"
+    )
