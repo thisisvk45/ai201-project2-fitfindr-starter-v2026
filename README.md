@@ -109,18 +109,26 @@ stripe detail works with a white tank and baggy denim for an easy weekend fit.
 These are the three tool checks run from the terminal.
 
 ```
-$ python -c "from tools import search_listings; print([(x['id'], x['price']) for x in search_listings('90s track jacket', size='M')])"
+$ python
+>>> from tools import search_listings
+>>> [(x['id'], x['price']) for x in search_listings('90s track jacket', size='M')]
 [('lst_004', 45.0), ('lst_022', 75.0), ('lst_013', 30.0), ('lst_032', 33.0)]
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[3], get_example_wardrobe()))"
+$ python
+>>> from tools import suggest_outfit
+>>> from utils.data_loader import get_example_wardrobe, load_listings
+>>> print(suggest_outfit(load_listings()[3], get_example_wardrobe()))
 Pair the Champion track jacket with a white ribbed tank top, baggy straight leg
 jeans, chunky white sneakers, and a black crossbody bag.
 ```
 
 ```
-$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('White ribbed tank top, baggy jeans, chunky sneakers, and a black crossbody bag.', load_listings()[3]))"
+$ python
+>>> from tools import create_fit_card
+>>> from utils.data_loader import load_listings
+>>> print(create_fit_card('White ribbed tank top, baggy jeans, chunky sneakers, and a black crossbody bag.', load_listings()[3]))
 Found a Champion track jacket on poshmark for $45.0. The navy and white stripe
 detail gives the outfit a clean sporty 90s feel.
 ```
