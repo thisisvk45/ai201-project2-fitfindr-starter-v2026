@@ -1,334 +1,175 @@
 # FitFindr
 
-> ### 👋 Start here
->
-> **New to this repo? Read [RUNNING.md](RUNNING.md) first** — setup, every
-> command, and what to do when something breaks.
->
-> Once `python test.py` passes:
->
-> ```bash
-> python app.py listings --full -n 6      # read the data (Milestone 1)
-> python app.py fields                    # what you can filter on
-> python app.py ask 'vintage graphic tee under $30'
-> ```
->
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
->
-> **The rest of this file is your submission.** Fill it in as you go.
+FitFindr is a small shopping agent for the supplied thrift listings. A user
+describes an item, optionally gives a size and budget, and receives a matching
+listing, outfit ideas, and a short caption for the find. The agent keeps one
+session dictionary so each step can use the result of the previous step without
+asking the user for the same information again. If search finds nothing, the
+agent stops immediately and gives the user a specific way to broaden the
+request.
 
----
-
-<!-- ─────────────────────────────────────────────────────────────────────────
-     HOW TO USE THIS FILE
-
-     This is your submission. Fill each section in as you finish the milestone
-     it belongs to — don't leave it all to the end.
-
-     Unit 3 asks for the first five sections. Unit 4 adds the five below them.
-     Leave the unit 4 sections alone until then; they're here so you know
-     what's coming.
-
-     Everything is pasted as TEXT. No screenshots, no images, no video links.
-     A typed block of output gets full credit; a picture of the same output
-     gets none.
-     ───────────────────────────────────────────────────────────────────────── -->
-
-<!-- ═══════════════════════ UNIT 3 — THE BUILD ═══════════════════════ -->
+![FitFindr agent flow](docs/agent_flow.svg)
 
 ## What This Does
 
-<!-- Three or four sentences: what a user asks for, and what they get back. -->
-
-
-
----
+FitFindr parses a plain language request with a small regular expression
+parser. It recognizes a size request such as `size M` and a budget such as
+`under $30`, then searches the forty provided listings. The search tool ranks
+keyword matches and applies inclusive size and price filters. When a match
+exists, FitFindr selects the first result, asks for outfit ideas using the
+saved wardrobe, and writes a short fit card with the item price and platform.
 
 ## Tool Inventory
 
-<!-- Four lines per tool. This is worth 2 points and it's the single most
-     common place students lose them.
-
-     "Returns a list" earns NOTHING. The description has to say what is IN
-     the list.
-
-     The empty case isn't optional either — it's the thing your loop branches
-     on, and if you don't decide it here you'll discover it as a crash in
-     Milestone 5. -->
-
 ### `search_listings`
 
-- **What it does:**
-- **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+**What it does:** Searches the provided listings with a description, optional
+size, and optional maximum price.
+
+**Inputs:** `description` is a `str`. `size` is a `str | None`.
+`max_price` is a `float | None`.
+
+**Returns:** A ranked `list[dict]` with at most ten listing dictionaries.
+Every dictionary includes `id`, `title`, `description`, `category`,
+`style_tags`, `size`, `condition`, `price`, `colors`, `brand`, and
+`platform`.
+
+**When it has nothing:** Returns an empty list.
 
 ### `suggest_outfit`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+**What it does:** Uses a selected listing and wardrobe to suggest one or two
+wearable combinations.
+
+**Inputs:** `new_item` is one listing `dict`. `wardrobe` is a `dict`
+whose `items` key holds a list of wardrobe items.
+
+**Returns:** A nonempty `str` with outfit ideas. When a wardrobe exists, the
+prompt asks for exact owned pieces. When it is empty, the prompt asks for
+general styling ideas instead.
+
+**When it has nothing:** An empty wardrobe is handled as a normal case. An
+empty model response becomes a useful retry message.
 
 ### `create_fit_card`
 
-- **What it does:**
-- **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+**What it does:** Turns a listing and outfit idea into a short caption that
+could accompany the find.
 
----
+**Inputs:** `outfit` is the `str` returned by `suggest_outfit`.
+`new_item` is the selected listing `dict`.
+
+**Returns:** A two to four sentence `str` that asks the model to include the
+item name, exact price, and platform.
+
+**When it has nothing:** Blank outfit text returns a message explaining that an
+outfit suggestion is needed first.
 
 ## Planning Loop
 
-<!-- Your branch rule, stated as a rule — the condition AND both paths — plus
-     the file and function that holds it.
+The planning loop lives in `agent.py::run_agent`. It is a state machine with
+three possible actions: search, suggest an outfit, and create a fit card.
 
-     Like this:
-       "If search_listings returns an empty list, put a message in the session
-        and stop. Otherwise take the first result and go to suggest_outfit."
-        — agent.py::run_agent
+1. It parses the query and stores `description`, `size`, and `max_price`
+   in `session["parsed"]`.
+2. It stores the search output in `session["search_results"]`.
+3. If that list is empty, it stores a message in `session["error"]` and
+   returns immediately. It does not call either model backed tool.
+4. If results exist, it stores the first result in
+   `session["selected_item"]`, copies the same object to
+   `session["outfit_input_item"]`, and calls `suggest_outfit`.
+5. It stores the outfit text in `session["outfit_suggestion"]`, then passes
+   it with the same selected item to `create_fit_card`.
+6. It stores the final caption in `session["fit_card"]` and returns the
+   complete session.
 
-     The grader checks your code against what you claim here, so the file and
-     function have to be real. -->
+![FitFindr session state](docs/session_state.svg)
 
-**Branch rule:**
-
-**Where it lives:** `agent.py::run_agent`
-
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
-
-**What moves through the session:** <!-- which fields, in what order -->
-
----
+The parser is deliberately deterministic. Prices and sizes have clear patterns
+in the provided command examples, so a model call would make a simple filter
+harder to test and would ask the user to spend another model request.
 
 ## Sample Run
 
-<!-- Two things go here.
-
-     1. One FULL query and its output, pasted as text.
-     2. Your three per-tool terminal tests — the command and what it printed. -->
-
-**One full query**
+The following completed run came from `python app.py ask '90s track jacket in
+size M'`.
 
 ```
-$ python app.py ask '...'
+Found: 90s Track Jacket, Navy and White Stripe, $45.0 on poshmark
 
+Outfit:
+Pair the track jacket with the white ribbed tank top, baggy straight leg jeans,
+chunky white sneakers, and the black crossbody bag for a sporty 90s look.
+
+Fit card:
+Scored this Champion 90s track jacket on poshmark for $45.0. The navy and white
+stripe detail works with a white tank and baggy denim for an easy weekend fit.
 ```
 
-**The three tools, tested one at a time**
+These are the three tool checks run from the terminal.
 
 ```
-$ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
-
-```
-
-```
-$ python -c "from tools import suggest_outfit; ..."
-
+$ python -c "from tools import search_listings; print([(x['id'], x['price']) for x in search_listings('90s track jacket', size='M')])"
+[('lst_004', 45.0), ('lst_022', 75.0), ('lst_013', 30.0), ('lst_032', 33.0)]
 ```
 
 ```
-$ python -c "from tools import create_fit_card; ..."
-
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[3], get_example_wardrobe()))"
+Pair the Champion track jacket with a white ribbed tank top, baggy straight leg
+jeans, chunky white sneakers, and a black crossbody bag.
 ```
 
----
+```
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('White ribbed tank top, baggy jeans, chunky sneakers, and a black crossbody bag.', load_listings()[3]))"
+Found a Champion track jacket on poshmark for $45.0. The navy and white stripe
+detail gives the outfit a clean sporty 90s feel.
+```
+
+The empty search path was also checked with `designer ballgown size XXS under
+$5`. It returned an error message that suggests broadening the description,
+changing the size, or raising the price limit. Its selected item, outfit
+suggestion, and fit card remained `None`.
 
 ## How I Used AI
 
-<!-- Two specific moments. What you asked, what came back, what you changed.
+### Moment 1
 
-     "I used Claude to help me code" is not enough.
+**What I asked for:** I asked Codex to inspect the supplied listings before
+writing the search tool and identify size formats that could make a simple
+substring check wrong.
 
-     "I gave Claude my search_listings spec. It returned None on no match
-     instead of an empty list, so I changed it" is the level we want. -->
+**What came back:** The data includes values such as `S/M`, `M/L`, `W30`,
+`US 8`, and `US 8.5`. A substring check would let a request for size 8
+match size 8.5 and could confuse apparel sizes with shoe sizes.
 
-**Moment 1**
+**What I changed:** I wrote separate matching rules for apparel ranges, waist
+sizes, and numeric shoe sizes. The search check now confirms that `W30`
+selects the W30 jeans and size 8 selects the US 8 sneakers rather than US 8.5.
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+### Moment 2
 
-**Moment 2**
+**What I asked for:** I asked Codex to inspect the planned state handoff and
+explain how a future test could prove that the item search selected was the
+same item passed to the outfit tool.
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+**What came back:** Reading only a generated outfit would not prove the item
+handoff, because a model can paraphrase an item. The session needs a visible
+record of the exact input used for the outfit call.
 
-<!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
+**What I changed:** I added `session["outfit_input_item"]`. The loop copies
+the selected listing there before calling `suggest_outfit`, which makes the
+two item ids directly comparable during Unit 4 testing.
 
-     Don't fill these in during unit 3.
-     ═══════════════════════════════════════════════════════════════════ -->
+## Running the Project
 
----
-
-## Run Log — Before
-
-<!-- Five criteria, five tries each, in this exact format.
-
-     Five, because your criteria are written out of five. Mark each try PASS
-     or FAIL, count the passes, and read that count against your target — a
-     row targeting 4 of 5 with three PASS cells is MISSED (3/5).
-
-     `python run_eval.py --label before` runs everything and writes the table
-     into results/. Paste it here and fill in the verdicts. -->
-
-| Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
-|---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
-
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+Activate the local environment, then run one of the commands below.
 
 ```
-
+source .venv/bin/activate
+python test.py
+python app.py ask '90s track jacket in size M'
+python app.py ask 'designer ballgown size XXS under $5'
 ```
 
----
-
-## Verdicts and Diagnoses
-
-<!-- MET or MISSED per criterion against LAST UNIT's target, plus a sentence on
-     how you decided.
-
-     Then, for every miss: which of the four places it happened — a tool, the
-     loop's branch, the session, or the model's output — AND the mechanism.
-
-     Not a diagnosis:  "The fit card was bad."
-     A diagnosis:      "The fit card criterion missed on 2 of 5 items. Both had
-                        an empty brand field. My prompt puts the brand in the
-                        first sentence, so the card opened with a blank and read
-                        like a fragment. The tool worked; the prompt assumed a
-                        field that isn't always there."
-
-     Look for a pattern. Three misses on the same tool is one problem, not
-     three. -->
-
-| # | Criterion | Target | Verdict | How I decided |
-|---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
-
-**Diagnoses**
-
-
-
----
-
-## Loop Trace
-
-<!-- One full run, printed step by step, with the MCP call visible in it.
-
-     `python app.py ask '...' --trace` once you've added the trace.step()
-     calls in Milestone 2.
-
-     Worth pasting BOTH the happy path and the empty-search path. The empty
-     one should be visibly shorter, because it stops. If your two traces are
-     the same length, your branch isn't working — and this is the fastest way
-     anyone will ever find that out. -->
-
-**Happy path**
-
-```
-
-```
-
-**Empty search**
-
-```
-
-```
-
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
-
-
-
----
-
-## The Improvement
-
-<!-- What you changed, why your diagnosis pointed at it, and the after-run in
-     the same table format. One change, measured properly.
-
-     `python run_eval.py --label after` -->
-
-**What I changed:**
-
-**Which failure it was meant to fix:**
-
-### Run Log — After
-
-| Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
-|---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
-
-**Did it help, and how do I know:**
-
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
-
-
-
----
-
-## What's Still Broken
-
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
-
-
-
-<!-- ═════════════════════════════════════════════════════════════════════
-
-     SUBMISSION CHECKLIST — unit 3
-
-       [ ] criteria.md has five numbered criteria, each with a target
-       [ ] Each criterion has a reason underneath it
-       [ ] All five unit 3 sections above have real content
-       [ ] Tool Inventory: all three tools, inputs WITH TYPES, a specific
-           return value, and the empty case
-       [ ] Planning Loop names the branch rule and agent.py::run_agent
-       [ ] Sample Run: one full query plus the three per-tool tests, as text
-       [ ] At least four new commits
-       [ ] Repository URL submitted — WRITE IT DOWN, you submit the same one
-           next unit
-
-     SUBMISSION CHECKLIST — unit 4
-
-       [ ] mcp_server.py exists with one tool registered
-           (or a written record of exactly where the rewire broke)
-       [ ] Run Log — Before, five criteria, five tries each
-       [ ] Real output pasted underneath, naming file and function
-       [ ] A verdict on every criterion
-       [ ] A diagnosis for every miss, naming a place AND a mechanism
-       [ ] Loop Trace, with the MCP call visible in it
-       [ ] All three failure modes triggered and handled
-       [ ] One improvement, with Run Log — After in the same format
-       [ ] What's Still Broken
-       [ ] At least four new commits
-       [ ] The SAME repository URL as last unit
-
-     Do not delete and recreate this repository. Your commit history is what
-     shows your criteria existed before your results did.
-     ═════════════════════════════════════════════════════════════════════ -->
-
----
-
-📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+The project uses Python 3.11. Put the existing Gemini key in `.env` as
+`GEMINI_API_KEY=...`. The file is ignored by Git and must never be committed.

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="270" viewBox="0 0 1000 270" role="img" aria-label="FitFindr session state">
+  <rect width="1000" height="270" fill="#f8fafc"/>
+  <text x="500" y="42" text-anchor="middle" font-family="Arial" font-size="26" font-weight="bold" fill="#172554">Session state carries one selected item through the agent</text>
+  <rect x="35" y="105" width="160" height="85" rx="14" fill="#e0e7ff" stroke="#4f46e5"/>
+  <text x="115" y="140" text-anchor="middle" font-family="Arial" font-size="18" font-weight="bold" fill="#312e81">parsed</text>
+  <text x="115" y="166" text-anchor="middle" font-family="Arial" font-size="13" fill="#3730a3">query filters</text>
+  <path d="M195 147 H245" stroke="#4f46e5" fill="none"/>
+  <polygon points="245,147 233,141 233,153" fill="#4f46e5"/>
+  <rect x="250" y="105" width="180" height="85" rx="14" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="340" y="140" text-anchor="middle" font-family="Arial" font-size="18" font-weight="bold" fill="#172554">search_results</text>
+  <text x="340" y="166" text-anchor="middle" font-family="Arial" font-size="13" fill="#1e3a8a">ranked listings</text>
+  <path d="M430 147 H480" stroke="#2563eb" fill="none"/>
+  <polygon points="480,147 468,141 468,153" fill="#2563eb"/>
+  <rect x="485" y="105" width="185" height="85" rx="14" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="577" y="140" text-anchor="middle" font-family="Arial" font-size="18" font-weight="bold" fill="#14532d">selected_item</text>
+  <text x="577" y="166" text-anchor="middle" font-family="Arial" font-size="13" fill="#166534">same id is recorded</text>
+  <path d="M670 147 H720" stroke="#16a34a" fill="none"/>
+  <polygon points="720,147 708,141 708,153" fill="#16a34a"/>
+  <rect x="725" y="105" width="240" height="85" rx="14" fill="#fef3c7" stroke="#d97706"/>
+  <text x="845" y="140" text-anchor="middle" font-family="Arial" font-size="18" font-weight="bold" fill="#78350f">outfit_input_item</text>
+  <text x="845" y="166" text-anchor="middle" font-family="Arial" font-size="13" fill="#92400e">suggestion and card use it</text>
+</svg>

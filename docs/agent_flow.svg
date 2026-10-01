@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="330" viewBox="0 0 1000 330" role="img" aria-label="FitFindr agent flow">
+  <rect width="1000" height="330" fill="#f8fafc"/>
+  <text x="500" y="42" text-anchor="middle" font-family="Arial" font-size="26" font-weight="bold" fill="#172554">FitFindr agent flow</text>
+  <rect x="45" y="112" width="190" height="92" rx="15" fill="#dbeafe" stroke="#2563eb"/>
+  <text x="140" y="150" text-anchor="middle" font-family="Arial" font-size="19" font-weight="bold" fill="#172554">Search listings</text>
+  <text x="140" y="178" text-anchor="middle" font-family="Arial" font-size="14" fill="#1e3a8a">description, size, price</text>
+  <path d="M235 158 H325" stroke="#2563eb" fill="none"/>
+  <polygon points="325,158 313,152 313,164" fill="#2563eb"/>
+  <text x="280" y="145" text-anchor="middle" font-family="Arial" font-size="14" fill="#1e3a8a">match found</text>
+  <rect x="330" y="112" width="190" height="92" rx="15" fill="#dcfce7" stroke="#16a34a"/>
+  <text x="425" y="150" text-anchor="middle" font-family="Arial" font-size="19" font-weight="bold" fill="#14532d">Suggest outfit</text>
+  <text x="425" y="178" text-anchor="middle" font-family="Arial" font-size="14" fill="#166534">item plus wardrobe</text>
+  <path d="M520 158 H610" stroke="#16a34a" fill="none"/>
+  <polygon points="610,158 598,152 598,164" fill="#16a34a"/>
+  <rect x="615" y="112" width="190" height="92" rx="15" fill="#fef3c7" stroke="#d97706"/>
+  <text x="710" y="150" text-anchor="middle" font-family="Arial" font-size="19" font-weight="bold" fill="#78350f">Create fit card</text>
+  <text x="710" y="178" text-anchor="middle" font-family="Arial" font-size="14" fill="#92400e">outfit plus item</text>
+  <path d="M140 204 V260 H850" stroke="#dc2626" fill="none"/>
+  <polygon points="850,260 838,254 838,266" fill="#dc2626"/>
+  <text x="140" y="236" text-anchor="middle" font-family="Arial" font-size="14" fill="#991b1b">no matches</text>
+  <rect x="855" y="218" width="110" height="84" rx="15" fill="#fee2e2" stroke="#dc2626"/>
+  <text x="910" y="250" text-anchor="middle" font-family="Arial" font-size="18" font-weight="bold" fill="#991b1b">Stop</text>
+  <text x="910" y="275" text-anchor="middle" font-family="Arial" font-size="13" fill="#991b1b">helpful message</text>
+</svg>
