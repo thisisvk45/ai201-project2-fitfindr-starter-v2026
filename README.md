@@ -14,71 +14,71 @@ nothing matches, it stops and tells the user what to change.
 
 ### `search_listings`
 
-- **What it does:** Keyword search over the listings, with optional size and
+- What it does: Keyword search over the listings, with optional size and
   price filters.
-- **Inputs:** `description` (str), `size` (str or None), `max_price`
+- Inputs: `description` (str), `size` (str or None), `max_price`
   (float or None, inclusive).
-- **Returns:** `list[dict]`, at most 10 listing dicts, best keyword match first
+- Returns: `list[dict]`, at most 10 listing dicts, best keyword match first
   (ties go to the lower price). Each dict has `id`, `title`, `description`,
   `category`, `style_tags`, `size`, `condition`, `price`, `colors`, `brand`,
   `platform`.
-- **When it has nothing:** an empty list `[]`.
+- When it has nothing: an empty list `[]`.
 
-**Size rule:** sizes are matched as tokens, not substrings. `8` matches
+Size rule: sizes are matched as tokens, not substrings. `8` matches
 `US 8` but not `US 8.5`, `W30` matches `W30 L30`, and `S` matches `S/M` but not
 the S in `US 9`.
 
 ### `suggest_outfit`
 
-- **What it does:** Asks the model for one or two outfits built around the
+- What it does: Asks the model for one or two outfits built around the
   picked listing.
-- **Inputs:** `new_item` (dict, one listing), `wardrobe` (dict with an
+- Inputs: `new_item` (dict, one listing), `wardrobe` (dict with an
   `items` list).
-- **Returns:** `str`, outfit ideas that name the user's own pieces.
-- **When it has nothing:** with an empty wardrobe it asks for general styling
+- Returns: `str`, outfit ideas that name the user's own pieces.
+- When it has nothing: with an empty wardrobe it asks for general styling
   ideas instead. If the model returns nothing, it returns a retry message.
 
 ### `create_fit_card`
 
-- **What it does:** Asks the model for a caption someone could post.
-- **Inputs:** `outfit` (str from `suggest_outfit`), `new_item` (dict).
-- **Returns:** `str`, two to four sentences that ask for the title, exact price
+- What it does: Asks the model for a caption someone could post.
+- Inputs: `outfit` (str from `suggest_outfit`), `new_item` (dict).
+- Returns: `str`, two to four sentences that ask for the title, exact price
   and platform once each.
-- **When it has nothing:** a blank `outfit` returns "I need an outfit
+- When it has nothing: a blank `outfit` returns "I need an outfit
   suggestion before I can make a fit card." without calling the model.
 
 ### `compare_price` (stretch)
 
-- **What it does:** Compares one listing's price with the other listings in the
+- What it does: Compares one listing's price with the other listings in the
   same category. No model call.
-- **Inputs:** `new_item` (dict).
-- **Returns:** `dict` with `item_id`, `item_price`, `category`,
+- Inputs: `new_item` (dict).
+- Returns: `dict` with `item_id`, `item_price`, `category`,
   `compared_count`, `median_price`, `lowest_price` and `verdict`. The verdict
   is `above typical` over 1.2 times the median, `below typical` under 0.8
   times, otherwise `typical`.
-- **When it has nothing:** if no other listing shares the category,
+- When it has nothing: if no other listing shares the category,
   `compared_count` is 0, the prices are None and the verdict is
   `no comparison`.
 
 ## Planning Loop
 
-**Branch rule:** If `search_listings` returns an empty list, put a message in
+Branch rule: If `search_listings` returns an empty list, put a message in
 `session["error"]` that names what to change and stop, without calling
 `suggest_outfit`. Otherwise take the first result and go to `compare_price`.
 
-**Second branch (stretch):** If `compare_price` says the pick is
+Second branch (stretch): If `compare_price` says the pick is
 `above typical` and the user gave no price limit, search again with the
 category median as the limit and keep only the same category. If that finds
 something, switch to it. Otherwise keep the first pick. Then go to
 `suggest_outfit`.
 
-**Where it lives:** `agent.py::run_agent`
+Where it lives: `agent.py::run_agent`
 
-**How the query is parsed:** regex, in `agent.py::_parse_query`. It pulls out
+How the query is parsed: regex, in `agent.py::_parse_query`. It pulls out
 `size X` and `under $N`, and the rest is the description. I thought a model
 call here would cost a request and make the branch harder to test.
 
-**What moves through the session:** `parsed`, `search_results`,
+What moves through the session: `parsed`, `search_results`,
 `selected_item`, `price_check`, `outfit_input_item`, `outfit_suggestion`,
 `fit_card`. `error` is set only on an empty search. `original_pick` and
 `price_branch` are set only when the second branch runs. Every tool reads its
@@ -89,7 +89,9 @@ input back out of the session, and `outfit_input_item` is copied from
 
 ## Sample Run
 
-**One full query**
+Pasted as printed, except the model's markdown stars are removed.
+
+### One full query
 
 ```
 $ python app.py ask '90s track jacket in size M'
@@ -99,18 +101,18 @@ $ python app.py ask '90s track jacket in size M'
 
   Outfit:   Here are two effortless ways to style your new Champion track jacket using pieces you already own:
 
-**Look 1: Streetwear Casual**
-Pair the track jacket unzipped over the **white ribbed tank top**, teamed with your **baggy straight-leg jeans (dark wash)**. Finish the outfit with your **chunky white sneakers** and the **black crossbody bag** for an easy, sporty 90s aesthetic. 
+Look 1: Streetwear Casual
+Pair the track jacket unzipped over the white ribbed tank top, teamed with your baggy straight-leg jeans (dark wash). Finish the outfit with your chunky white sneakers and the black crossbody bag for an easy, sporty 90s aesthetic. 
 
-**Look 2: High-Low Contrast**
-Layer the track jacket over the **white ribbed tank top**, but tuck it into your **wide-leg khaki trousers** secured with the **brown leather belt**. Ground the look with your **chunky white sneakers** and carry the **black crossbody bag** for a clean, street-smart mix of athletic and minimal styles.
+Look 2: High-Low Contrast
+Layer the track jacket over the white ribbed tank top, but tuck it into your wide-leg khaki trousers secured with the brown leather belt. Ground the look with your chunky white sneakers and carry the black crossbody bag for a clean, street-smart mix of athletic and minimal styles.
 
   Fit card: Scored this pristine Champion 90s Track Jacket on Poshmark for just $45.0, and it is the ultimate lightweight layer for throwing over a white tank and baggy denim. The navy and white sleeve detailing gives it such an authentic retro athletic feel.
 
 0 model calls this session, 2 served from cache
 ```
 
-**The empty search**
+### The empty search
 
 ```
 $ python app.py ask 'designer ballgown size XXS under $5'
@@ -120,7 +122,7 @@ $ python app.py ask 'designer ballgown size XXS under $5'
 0 model calls this session
 ```
 
-**The tools, tested one at a time**
+### The tools, tested one at a time
 
 ```
 $ python -c "from tools import search_listings; print([(x['id'], x['title'], x['price']) for x in search_listings('graphic tee', max_price=30)])"
@@ -136,11 +138,11 @@ $ python -c "from tools import search_listings; print(search_listings('designer 
 $ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[3], get_example_wardrobe()))"
 Here are two effortless ways to style your new Champion track jacket using pieces you already own:
 
-**Look 1: Streetwear Casual**
-Pair the track jacket unzipped over the **white ribbed tank top**, teamed with your **baggy straight-leg jeans (dark wash)**. Finish the outfit with your **chunky white sneakers** and the **black crossbody bag** for an easy, sporty 90s aesthetic. 
+Look 1: Streetwear Casual
+Pair the track jacket unzipped over the white ribbed tank top, teamed with your baggy straight-leg jeans (dark wash). Finish the outfit with your chunky white sneakers and the black crossbody bag for an easy, sporty 90s aesthetic. 
 
-**Look 2: High-Low Contrast**
-Layer the track jacket over the **white ribbed tank top**, but tuck it into your **wide-leg khaki trousers** secured with the **brown leather belt**. Ground the look with your **chunky white sneakers** and carry the **black crossbody bag** for a clean, street-smart mix of athletic and minimal styles.
+Look 2: High-Low Contrast
+Layer the track jacket over the white ribbed tank top, but tuck it into your wide-leg khaki trousers secured with the brown leather belt. Ground the look with your chunky white sneakers and carry the black crossbody bag for a clean, street-smart mix of athletic and minimal styles.
 ```
 
 ```
@@ -157,163 +159,103 @@ $ python -c "from tools import compare_price; from utils.data_loader import load
 
 I declared these three before I built them.
 
-1. **A fourth tool, `compare_price`.** It compares the selected listing's price
+1. A fourth tool, `compare_price`. It compares the selected listing's price
    with the other listings in the same category and returns the median, the
    lowest price and a verdict.
-2. **A second branch.** If `compare_price` says the first pick is above typical
+2. A second branch. If `compare_price` says the first pick is above typical
    for its category and the user gave no price limit, the loop searches again
    with the category median as the limit and switches to a cheaper result in
    the same category. If there is none, it keeps the first pick.
-3. **Style memory.** With `--remember`, the agent saves each item it picks to a
+3. Style memory. With `--remember`, the agent saves each item it picks to a
    local file and adds saved items to the wardrobe on the next run.
 
 ### What each one changed
 
-**`compare_price`.** The agent calls it on every pick. The `Price:` line in
-the full query above is its output: $45 against a $40 median, so typical.
+`compare_price`: the agent calls it on every pick. It prints the `Price:` line,
+as in the full query above.
 
-**Second branch.** For `leather jacket` the first pick was a $75 leather
-bomber, above typical for outerwear, with no price limit. The loop searched
-again under the $40 median and switched to a $33 shacket. The shacket is not
-leather, so the cheaper pick is a looser match. For `cardigan` nothing cheaper
+Second branch: for `leather jacket` the first pick was a $75 bomber, above
+typical, with no price limit. The loop searched again under the $40 median and
+switched to a $33 shacket, which is not leather. For `cardigan` nothing cheaper
 matched, so it kept the first pick.
 
 ```
 $ python app.py ask 'leather jacket'
-
   Found:    Shacket — Olive Canvas — $33.0 on poshmark
   Price:    below typical ($33.0 vs a median of $42.0 across 7 other outerwear)
   Branch:   switched to a cheaper pick (first pick: 90s Leather Bomber — Black, $75.0)
+  ...
 
-  Outfit:   **Outfit 1: Casual Streetwear**
-Layer the olive canvas shacket open over the white ribbed tank top and baggy dark-wash straight-leg jeans. Cinch the waist with the brown leather belt. Finish with the chunky white sneakers and the black crossbody bag for an easy, transitional everyday look.
-
-**Outfit 2: Earth-Tone Minimal**
-Wear the shacket layered directly over the white ribbed tank top, paired with the wide-leg khaki trousers and the brown leather belt. Ground the outfit with the black combat boots for contrast, and carry the black crossbody bag to keep the look effortless and practical.
-
-  Fit card: Found the ultimate transitional layer in this olive canvas shacket—thicker than a shirt, lighter than a jacket, and the exact earthy green I’ve been hunting for. Picked it up on Poshmark for just $33.0, and it’s in amazing condition. Thinking it’ll look so good thrown over a white tank with wide-leg trousers for that easy, everyday uniform.
-
-2 model calls this session, 614 prompt + 209 output tokens
-```
-
-```
 $ python app.py ask 'cardigan'
-
   Found:    Knit Cardigan — Chunky Brown — $35.0 on depop
   Price:    above typical ($35.0 vs a median of $20.5 across 14 other tops)
   Branch:   no cheaper match, kept the first pick
-
-  Outfit:   **Outfit 1: Casual Streetwear**
-Layer the chunky brown cardigan over the white ribbed tank top and pair with your baggy dark-wash straight-leg jeans. Cinch the waist with the brown leather belt, and finish with the chunky white sneakers and black crossbody bag. 
-
-**Outfit 2: Earth-Tone Minimalist**
-Wear the cardigan open over the white ribbed tank top tucked into your wide-leg khaki trousers. Accessorize with the brown leather belt, and ground the look with the black combat boots for a cozy, grounded silhouette.
-
-  Fit card: Found the ultimate chunky brown knit cardigan to live in all season. It’s in gorgeous shape, hits right at the hip, and is ready for all your oversized layering needs. Grab it on depop for $35.0 before I change my mind and keep it for myself.
-
-2 model calls this session, 616 prompt + 172 output tokens
+  ...
 ```
 
-**Style memory.** Both runs use an empty wardrobe. Run 1 has nothing saved,
-so the outfit is general advice, and it saves the carpenter jeans. Run 2 adds
-them to the wardrobe, and both outfits are built around them. The model also
-named a hoodie and boots that the wardrobe does not hold, even though the
-prompt says not to.
+Style memory: both runs use an empty wardrobe. Run 1 saves the carpenter
+jeans. Run 2 loads them, and both outfits use them. The model also named a
+hoodie and boots the wardrobe does not hold.
 
 ```
-$ python app.py forget
-Cleared 0 item(s) from style memory.
-
 $ python app.py ask 'baggy carpenter jeans' --empty-wardrobe --remember
-(running with an empty wardrobe)
 (style memory: 0 saved item(s) added to the wardrobe)
-
   Found:    Baggy Carpenter Jeans — Dark Wash — $36.0 on depop
-  Price:    typical ($36.0 vs a median of $30.0 across 9 other bottoms)
-
-  Outfit:   At $36, these dark wash carpenter jeans are a versatile streetwear staple. Since they have a relaxed, 90s silhouette, balance the volume with your top half. 
-
-**Idea 1: The Casual Streetwear Look**
-Pair them with a cropped graphic tee or a fitted ribbed tank top to contrast the baggy fit. Layer with an unbuttoned flannel or a vintage leather bomber jacket, and finish with retro sneakers like chunky skate shoes.
-
-**Idea 2: Elevated Workwear**
-Lean into the utility aesthetic by tucking in a crisp, oversized white button-down shirt. Cinch the waist with a simple leather belt, and style with chunky loafers or leather boots for a cool, mixed-genre outfit.
-
-  Fit card: Major 90s workwear vibes with these dark wash baggy carpenter jeans, complete with the classic side hammer loop. I just listed this W32 pair for $36 on depop, and they're ready to be styled with a fitted ribbed tank and retro skate shoes.
-
+  Outfit:   At $36, these dark wash carpenter jeans are a versatile streetwear staple. ...
   Saved to style memory: Baggy Carpenter Jeans — Dark Wash
 
-2 model calls this session, 434 prompt + 208 output tokens
 $ python app.py ask 'vintage band tee' --empty-wardrobe --remember
-(running with an empty wardrobe)
 (style memory: 1 saved item(s) added to the wardrobe)
-
   Found:    Vintage Band Tee — Faded Grey — $19.0 on depop
-  Price:    typical ($19.0 vs a median of $21.5 across 14 other tops)
-
-  Outfit:   **Outfit 1: Effortless 90s Streetwear**
-*   **Top:** Vintage Band Tee (Faded Grey)
-*   **Bottoms:** Baggy Carpenter Jeans (Dark Wash)
-*   **Footwear:** White Canvas Low-Top Sneakers 
-*   **Layer:** Oversized Black Zip-Up Hoodie
-*   **Accessories:** Silver Chain Necklace
-
-**Outfit 2: Grungy Casual**
-*   **Top:** Vintage Band Tee (Faded Grey)
-*   **Bottoms:** Baggy Carpenter Jeans (Dark Wash)
-*   **Footwear:** Black Leather Combat Boots
-*   **Layer:** Distressed Red Flannel Shirt (worn open or tied around the waist)
-*   **Accessories:** Black Webbed Belt with Metal Buckle
-
-  Fit card: Found the ultimate boxy, well-loved vintage band tee with the best natural fade. I’ve got it listed over on depop for $19.0 to complete all your 90s streetwear fits. Throw it on with some baggy dark wash denim and combat boots and you're good to go.
-
+  Outfit:   Outfit 1: Effortless 90s Streetwear
+  - Top: Vintage Band Tee (Faded Grey)
+  - Bottoms: Baggy Carpenter Jeans (Dark Wash)
+  ...
+  Outfit 2: Grungy Casual
+  - Top: Vintage Band Tee (Faded Grey)
+  - Bottoms: Baggy Carpenter Jeans (Dark Wash)
+  ...
   Saved to style memory: Vintage Band Tee — Faded Grey
-
-2 model calls this session, 469 prompt + 229 output tokens
-$ python app.py memory
-Style memory holds 2 item(s):
-
-  mem_lst_031  bottoms      Baggy Carpenter Jeans — Dark Wash
-  mem_lst_033  tops         Vintage Band Tee — Faded Grey
 ```
 
-`python app.py forget` clears it. The file is `.fitfindr_memory.json`, which
-git ignores.
+These blocks are trimmed to the relevant lines (`...` marks a cut). The
+commands reproduce the full output. `python app.py forget` clears the memory
+file, `.fitfindr_memory.json`, which git ignores.
 
 ## How I Used AI
 
 ### Moment 1
 
-**What I asked for:** Before writing the search tool, I asked Codex to find
+What I asked for: Before writing the search tool, I asked Codex to find
 size formats in the listings that would break a substring check.
 
-**What came back:** `S/M`, `M/L`, `W30`, `US 8` and `US 8.5`. A substring
+What came back: `S/M`, `M/L`, `W30`, `US 8` and `US 8.5`. A substring
 check would match size 8 to `US 8.5` and mix clothing sizes with shoe sizes.
 
-**What I changed:** I wrote separate rules for clothing ranges, waist sizes
+What I changed: I wrote separate rules for clothing ranges, waist sizes
 and shoe sizes. Size 8 now returns only the `US 8` sneakers, and `W30` returns
 the W30 jeans.
 
 ### Moment 2
 
-**What I asked for:** I asked Codex how a test could prove the item search
+What I asked for: I asked Codex how a test could prove the item search
 picked is the same item `suggest_outfit` received.
 
-**What came back:** Reading the outfit text cannot prove it, because the model
+What came back: Reading the outfit text cannot prove it, because the model
 paraphrases. The session needs a record of the exact input.
 
-**What I changed:** I added `session["outfit_input_item"]`, copied from
+What I changed: I added `session["outfit_input_item"]`, copied from
 `selected_item` right before the call, so criterion 3 can compare the two ids.
 
 ### Moment 3
 
-**What I asked for:** I asked Claude to build the three stretch features, with
+What I asked for: I asked Claude to build the three stretch features, with
 the README declaration committed before any code.
 
-**What came back:** When I tested the second search without a category
+What came back: When I tested the second search without a category
 filter, `leather jacket` under $40 returned a leather belt first.
 
-**What I changed:** The second search keeps only results in the same category
+What I changed: The second search keeps only results in the same category
 as the first pick, so the switch is from one jacket to another.
 
 ## Running the Project
