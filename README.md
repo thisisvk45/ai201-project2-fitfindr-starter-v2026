@@ -24,9 +24,9 @@ nothing matches, it stops and tells the user what to change.
   `platform`.
 - **When it has nothing:** an empty list `[]`.
 
-I researched the size values before writing the filter. The data has `S/M`,
-`W30 L30`, `US 8` and `US 8.5`, so a substring test would be wrong. Size 8
-matches `US 8` but not `US 8.5`, and `S` does not match the S in `US 9`.
+**Size rule:** sizes are matched as tokens, not substrings. `8` matches
+`US 8` but not `US 8.5`, `W30` matches `W30 L30`, and `S` matches `S/M` but not
+the S in `US 9`.
 
 ### `suggest_outfit`
 
@@ -169,14 +169,13 @@ I declared these three before I built them.
 
 ### What each one changed
 
-**`compare_price`.** The agent now calls it on every pick. The `Price:` line
-in the full query above is its output: the track jacket is typical at $45
-against a median of $40.
+**`compare_price`.** The agent calls it on every pick. The `Price:` line in
+the full query above is its output: $45 against a $40 median, so typical.
 
 **Second branch.** For `leather jacket` the first pick was a $75 leather
-bomber, above typical for outerwear, and I gave no price limit. The loop
-searched again under the $40 outerwear median and switched to the shacket. The cost: the shacket is
-not leather. For `cardigan` the pick was above typical but nothing cheaper
+bomber, above typical for outerwear, with no price limit. The loop searched
+again under the $40 median and switched to a $33 shacket. The shacket is not
+leather, so the cheaper pick is a looser match. For `cardigan` nothing cheaper
 matched, so it kept the first pick.
 
 ```
@@ -215,11 +214,11 @@ Wear the cardigan open over the white ribbed tank top tucked into your wide-leg 
 2 model calls this session, 616 prompt + 172 output tokens
 ```
 
-**Style memory.** Both runs use an empty wardrobe. The first run has nothing
-saved, so the outfit is general advice. It saves the carpenter jeans. The
-second run adds them to the wardrobe, and the outfit builds both looks around
-them. The model also named pieces the wardrobe does not hold, such as a hoodie
-and boots, even though the prompt says not to.
+**Style memory.** Both runs use an empty wardrobe. Run 1 has nothing saved,
+so the outfit is general advice, and it saves the carpenter jeans. Run 2 adds
+them to the wardrobe, and both outfits are built around them. The model also
+named a hoodie and boots that the wardrobe does not hold, even though the
+prompt says not to.
 
 ```
 $ python app.py forget
@@ -278,43 +277,38 @@ Style memory holds 2 item(s):
   mem_lst_033  tops         Vintage Band Tee — Faded Grey
 ```
 
-`python app.py forget` clears the memory. The file, `.fitfindr_memory.json`,
-is ignored by git.
+`python app.py forget` clears it. The file is `.fitfindr_memory.json`, which
+git ignores.
 
 ## How I Used AI
 
 ### Moment 1
 
-**What I asked for:** I asked Codex to inspect the supplied listings before
-writing the search tool and identify size formats that could make a simple
-substring check wrong.
+**What I asked for:** Before writing the search tool, I asked Codex to find
+size formats in the listings that would break a substring check.
 
-**What came back:** The data includes values such as `S/M`, `M/L`, `W30`,
-`US 8`, and `US 8.5`. A substring check would let a request for size 8
-match size 8.5 and could confuse apparel sizes with shoe sizes.
+**What came back:** `S/M`, `M/L`, `W30`, `US 8` and `US 8.5`. A substring
+check would match size 8 to `US 8.5` and mix clothing sizes with shoe sizes.
 
-**What I changed:** I wrote separate matching rules for apparel ranges, waist
-sizes, and numeric shoe sizes. The search check now confirms that `W30`
-selects the W30 jeans and size 8 selects the US 8 sneakers rather than US 8.5.
+**What I changed:** I wrote separate rules for clothing ranges, waist sizes
+and shoe sizes. Size 8 now returns only the `US 8` sneakers, and `W30` returns
+the W30 jeans.
 
 ### Moment 2
 
-**What I asked for:** I asked Codex to inspect the planned state handoff and
-explain how a future test could prove that the item search selected was the
-same item passed to the outfit tool.
+**What I asked for:** I asked Codex how a test could prove the item search
+picked is the same item `suggest_outfit` received.
 
-**What came back:** Reading only a generated outfit would not prove the item
-handoff, because a model can paraphrase an item. The session needs a visible
-record of the exact input used for the outfit call.
+**What came back:** Reading the outfit text cannot prove it, because the model
+paraphrases. The session needs a record of the exact input.
 
-**What I changed:** I added `session["outfit_input_item"]`. The loop copies
-the selected listing there before calling `suggest_outfit`, which makes the
-two item ids directly comparable during Unit 4 testing.
+**What I changed:** I added `session["outfit_input_item"]`, copied from
+`selected_item` right before the call, so criterion 3 can compare the two ids.
 
 ### Moment 3
 
-**What I asked for:** I asked Claude to build the three stretch features,
-starting with a README declaration committed before any code.
+**What I asked for:** I asked Claude to build the three stretch features, with
+the README declaration committed before any code.
 
 **What came back:** When I tested the second search without a category
 filter, `leather jacket` under $40 returned a leather belt first.

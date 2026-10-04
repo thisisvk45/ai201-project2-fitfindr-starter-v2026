@@ -62,56 +62,19 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
     Run the loop once and return the finished session.
 
     Args:
-        query:    what the user asked for, in plain language
-                  (e.g. "vintage graphic tee under $30, size M").
-        wardrobe: a wardrobe dict — get_example_wardrobe() or
-                  get_empty_wardrobe() from utils/data_loader.py.
+        query:    what the user asked for, e.g. "vintage graphic tee under $30".
+        wardrobe: get_example_wardrobe() or get_empty_wardrobe().
+        remember: add saved items to the wardrobe and save the final pick
+                  (style memory, see memory.py).
 
     Returns:
-        The session dict. **Check session["error"] first** — if it isn't None,
-        the run ended early and the later fields will still be None.
+        The session dict. If session["error"] is set, the search was empty and
+        the run stopped before suggest_outfit.
 
-    ─────────────────────────────────────────────────────────────────────────
-    TODO — build this, following the branch rule you wrote in Milestone 2.
-
-      1. Start a session with new_session().
-
-      2. Count the times round the loop, and call trace.check_iterations(count)
-         on each one before you go again. It raises when the count passes
-         MAX_ITERATIONS in config.py — see trace.py.
-
-      3. Parse the query into a description, a size, and a max_price. Regex,
-         string splitting, or asking the model are all fine — say which you
-         chose in your README. Put the result in session["parsed"].
-
-      4. Call search_listings() with what you parsed.
-         Put the results in session["search_results"].
-
-         ⚠️ THIS IS THE BRANCH. If nothing came back:
-              - put a message in session["error"] saying what the user could
-                change — "No results" is not that message
-              - return the session
-              - do NOT call suggest_outfit with nothing
-
-      5. Choose an item — the first result is fine. Put it in
-         session["selected_item"].
-
-      6. Call suggest_outfit() with the selected item and the wardrobe.
-         Put the result in session["outfit_suggestion"].
-
-      7. Call create_fit_card() with the outfit and the item.
-         Put the result in session["fit_card"].
-
-      8. Return the session.
-
-    ─────────────────────────────────────────────────────────────────────────
-    IN UNIT 4 you come back and add two things:
-
-      • Trace calls. One per step. `trace.step("search_listings", inputs=...,
-        returned=...)` — see trace.py. Your README needs the output.
-
-      • A handler for ModelUnavailable, so a bad key produces a message rather
-        than a stack trace. The import is already at the top of this file.
+    Steps: search_listings, then compare_price, then suggest_outfit, then
+    create_fit_card. Branch 1: an empty search stops the run. Branch 2: a pick
+    that is above typical, with no price limit, triggers a second search under
+    the category median.
     """
     if remember:
         wardrobe = memory.with_memory(wardrobe)
