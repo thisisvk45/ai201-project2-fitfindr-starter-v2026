@@ -15,6 +15,9 @@ env/
 # Cached model responses
 .cache/
 
+# Style memory (stretch), local to each user
+.fitfindr_memory.json
+
 # OS noise
 .DS_Store
 Thumbs.db

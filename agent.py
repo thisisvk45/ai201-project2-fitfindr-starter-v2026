@@ -19,6 +19,7 @@ import config
 import trace
 from tools import search_listings, suggest_outfit, create_fit_card, compare_price
 from generate import ModelUnavailable
+import memory
 
 
 # ── session state ─────────────────────────────────────────────────────────────
@@ -50,12 +51,13 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "price_check": None,         # compare_price result for the final pick
         "price_branch": None,        # what the second branch did, if it ran
         "original_pick": None,       # first pick, kept when the branch switches
+        "remembered_item": None,     # what style memory saved after this run
     }
 
 
 # ── planning loop ─────────────────────────────────────────────────────────────
 
-def run_agent(query: str, wardrobe: dict) -> dict:
+def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
     """
     Run the loop once and return the finished session.
 
@@ -111,6 +113,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
       • A handler for ModelUnavailable, so a bad key produces a message rather
         than a stack trace. The import is already at the top of this file.
     """
+    if remember:
+        wardrobe = memory.with_memory(wardrobe)
     session = new_session(query, wardrobe)
     session["parsed"] = _parse_query(query)
 
@@ -180,6 +184,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             )
             next_step = None
 
+    if remember:
+        session["remembered_item"] = memory.remember_item(session["selected_item"])
     return session
 
 
