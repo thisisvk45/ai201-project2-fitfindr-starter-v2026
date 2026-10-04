@@ -8,6 +8,9 @@ FitFindr — command line.
     python app.py listings                browse the data  (Milestone 1)
     python app.py fields                  what fields a listing has
     python app.py examples                queries worth trying, including a dud
+    python app.py ask '...' --remember    use and update style memory (stretch)
+    python app.py memory                  show what style memory holds
+    python app.py forget                  clear style memory
 
 Add --trace to any `ask` to print the loop step by step.
 
@@ -104,14 +107,18 @@ def cmd_examples(args):
     )
 
 
-def _ask_one(query, wardrobe, use_trace):
+def _ask_one(query, wardrobe, use_trace, remember=False):
     from agent import run_agent
     import trace as trace_module
 
     if use_trace:
         trace_module.start_trace()
 
-    session = run_agent(query, wardrobe)
+    if remember:
+        import memory
+        print(f"(style memory: {len(memory.load_memory())} saved item(s) added to the wardrobe)")
+
+    session = run_agent(query, wardrobe, remember=remember)
 
     print()
     if session["error"]:
@@ -119,10 +126,23 @@ def _ask_one(query, wardrobe, use_trace):
     else:
         item = session["selected_item"] or {}
         print(f"  Found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
+        check = session.get("price_check")
+        if check:
+            print(
+                f"  Price:    {check['verdict']} (${check['item_price']} vs a median of "
+                f"${check['median_price']} across {check['compared_count']} other {check['category']})"
+            )
+        if session.get("price_branch"):
+            first = session.get("original_pick")
+            extra = f" (first pick: {first['title']}, ${first['price']})" if first else ""
+            print(f"  Branch:   {session['price_branch']}{extra}")
         print()
         print(f"  Outfit:   {session['outfit_suggestion']}")
         print()
         print(f"  Fit card: {session['fit_card']}")
+        if session.get("remembered_item"):
+            print()
+            print(f"  Saved to style memory: {session['remembered_item']['name']}")
     print()
 
     if use_trace:
@@ -145,7 +165,7 @@ def cmd_ask(args):
 
     try:
         if args.query:
-            _ask_one(args.query, wardrobe, args.trace)
+            _ask_one(args.query, wardrobe, args.trace, args.remember)
         else:
             print("Ask for something, or press Enter on an empty line to quit.\n")
             while True:
@@ -156,9 +176,25 @@ def cmd_ask(args):
                     break
                 if not query:
                     break
-                _ask_one(query, wardrobe, args.trace)
+                _ask_one(query, wardrobe, args.trace, args.remember)
     finally:
         print(generate.usage())
+
+
+def cmd_memory(args):
+    import memory
+    items = memory.load_memory()
+    if not items:
+        print("Style memory is empty.")
+        return
+    print(f"Style memory holds {len(items)} item(s):\n")
+    for item in items:
+        print(f"  {item['id']:<12} {item['category']:<12} {item['name']}")
+
+
+def cmd_forget(args):
+    import memory
+    print(f"Cleared {memory.forget()} item(s) from style memory.")
 
 
 def build_parser():
@@ -189,7 +225,18 @@ def build_parser():
         action="store_true",
         help="run as a user with nothing saved — one of unit 4's failure modes",
     )
+    p_ask.add_argument(
+        "--remember",
+        action="store_true",
+        help="add saved items to the wardrobe and save this pick (style memory)",
+    )
     p_ask.set_defaults(func=cmd_ask)
+
+    p_mem = sub.add_parser("memory", help="show what style memory holds")
+    p_mem.set_defaults(func=cmd_memory)
+
+    p_forget = sub.add_parser("forget", help="clear style memory")
+    p_forget.set_defaults(func=cmd_forget)
 
     return parser
 
