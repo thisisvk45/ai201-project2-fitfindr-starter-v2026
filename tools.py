@@ -11,9 +11,6 @@ can't tell which layer is lying to you.
     create_fit_card(outfit, new_item)              → str
     compare_price(new_item)                        → dict   (stretch)
 
-All three are stubs right now. They run and they do nothing — that's the
-starting position and it's deliberate.
-
 ⚠️ Before you write any of them, fill in the **Tool Inventory** section of your
 README (Milestone 2). Four lines per tool: what it does, each input with its
 type, exactly what it returns, and what it returns when it has nothing to give.
@@ -71,14 +68,6 @@ def search_listings(
     realistic — thrift listings often have no brand. If something you write
     assumes a brand is always there, you will find out in unit 4.
 
-    TODO:
-        1. Load every listing with load_listings().
-        2. Filter by max_price and by size, when each is provided.
-        3. Score what's left by keyword overlap with `description`.
-        4. Drop anything scoring zero.
-        5. Sort by score, highest first, and return the listing dicts —
-           at most config.SEARCH_RESULT_LIMIT of them.
-
     Test it from a terminal before you move on:
         python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
     """
@@ -121,13 +110,6 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
         With an empty wardrobe, return general styling advice rather than
         raising or returning "". Unit 4 has you trigger the empty wardrobe on
         purpose, so decide now what it should do.
-
-    TODO:
-        1. Check whether wardrobe['items'] is empty.
-        2. If it is, ask the model for general styling ideas for this item.
-        3. If it isn't, format the wardrobe items into the prompt and ask for
-           specific combinations naming pieces the user already owns.
-        4. Return the model's response.
 
     Test it from a terminal before you move on:
         python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
@@ -187,11 +169,6 @@ def create_fit_card(outfit: str, new_item: dict) -> str:
 
         • CACHE_ENABLED — the adapter handed back an answer it already had
         • TEMPERATURE   — at 0.0 the model gives the same words every time
-
-    TODO:
-        1. Guard against an empty or whitespace-only `outfit`.
-        2. Build a prompt with the item details and the outfit.
-        3. Call generate() and return the response.
 
     Test it from a terminal before you move on:
         python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
@@ -306,10 +283,10 @@ def _size_matches(requested: str, available: str) -> bool:
     if not wanted:
         return True
 
-    # Shoe sizes: ``8`` is a match for ``US 8``, but not ``US 8.5``.
+    # Shoe sizes: ``8`` is a match for ``US 8``, but not ``US 8.5`` or ``W28``.
     if re.fullmatch(r"\d+(?:\.\d+)?", wanted):
         number = re.escape(wanted)
-        return bool(re.search(rf"(?:US\s*)?{number}(?![\d.])", offered))
+        return bool(re.search(rf"(?<![\d.]){number}(?![\d.])", offered))
 
     # Waist/inseam requests are written in the data as W30, W28, and so on.
     if re.fullmatch(r"W\d+", wanted):
