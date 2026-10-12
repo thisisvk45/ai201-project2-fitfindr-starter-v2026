@@ -75,7 +75,16 @@ def main():
     parser.add_argument("--tries", "--trials", type=int, default=5, dest="tries",
                         help="tries per scenario (default 5, matching your criteria)")
     parser.add_argument("--label", default="", help="a name for this run, e.g. 'before'")
+    parser.add_argument("--only", type=int, default=None,
+                        help="run only the scenario for this criterion and save it as a part")
+    parser.add_argument("--assemble", action="store_true",
+                        help="write the run log from the parts saved by --only")
     args = parser.parse_args()
+
+    if args.assemble:
+        rows = [_load_part(args.label, s) for s in scenario_module.SCENARIOS]
+        write_report(rows, args)
+        return
 
     problems = scenario_module.validate()
     if problems:
@@ -96,7 +105,9 @@ def main():
     print("Cache is OFF for this run — that's deliberate.\n")
 
     rows = []
-    for scenario in scenario_module.SCENARIOS:
+    chosen = [s for s in scenario_module.SCENARIOS
+              if args.only is None or s.get("criterion") == args.only]
+    for scenario in chosen:
         print(f"{scenario['name']}  ({scenario['wardrobe']} wardrobe)")
         print(f"  query: {scenario.get('query') or ' / '.join(scenario['queries'])}")
 
@@ -120,7 +131,31 @@ def main():
         rows.append({"scenario": scenario, "tries": tries})
         print()
 
+    if args.only is not None:
+        # Long runs are split one criterion at a time; --assemble joins them.
+        for row in rows:
+            _save_part(args.label, row)
+        import generate
+        print(generate.usage())
+        return
+
     write_report(rows, args)
+
+
+def _part_path(label, scenario):
+    folder = config.CACHE_DIR / "eval_parts"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / f"{label or 'run'}_{scenario['name'].replace(' ', '_')}.json"
+
+
+def _save_part(label, row):
+    import json
+    _part_path(label, row["scenario"]).write_text(json.dumps(row, indent=1), encoding="utf-8")
+
+
+def _load_part(label, scenario):
+    import json
+    return json.loads(_part_path(label, scenario).read_text(encoding="utf-8"))
 
 
 def write_report(rows, args):
