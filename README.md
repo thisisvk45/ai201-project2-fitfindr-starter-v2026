@@ -130,29 +130,15 @@ $ python -c "from tools import search_listings; print([(x['id'], x['title'], x['
 ```
 
 ```
-$ python -c "from tools import search_listings; print(search_listings('designer ballgown', size='XXS', max_price=5))"
-[]
-```
-
-```
 $ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[3], get_example_wardrobe()))"
 Here are two effortless ways to style your new Champion track jacket using pieces you already own:
 
-Look 1: Streetwear Casual
-Pair the track jacket unzipped over the white ribbed tank top, teamed with your baggy straight-leg jeans (dark wash). Finish the outfit with your chunky white sneakers and the black crossbody bag for an easy, sporty 90s aesthetic. 
-
-Look 2: High-Low Contrast
-Layer the track jacket over the white ribbed tank top, but tuck it into your wide-leg khaki trousers secured with the brown leather belt. Ground the look with your chunky white sneakers and carry the black crossbody bag for a clean, street-smart mix of athletic and minimal styles.
+...
 ```
 
 ```
 $ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('White ribbed tank top, baggy jeans and chunky white sneakers.', load_listings()[3]))"
 Layered this 90s Champion track jacket over a white ribbed tank with baggy denim and chunky sneakers today. Found this lightweight navy and white striped piece in pristine condition for just $45.0 on poshmark. It's the ultimate effortless throw-on piece for transitional weather.
-```
-
-```
-$ python -c "from tools import compare_price; from utils.data_loader import load_listings; print(compare_price(load_listings()[21]))"
-{'item_id': 'lst_022', 'item_price': 75.0, 'category': 'outerwear', 'compared_count': 7, 'median_price': 40.0, 'lowest_price': 27.0, 'verdict': 'above typical'}
 ```
 
 ## Stretch Features
@@ -171,111 +157,54 @@ I declared these three before I built them.
 
 ### What each one changed
 
-`compare_price`: the agent calls it on every pick. It prints the `Price:` line,
-as in the full query above.
+`compare_price` runs on every pick and prints the `Price:` line above.
 
-Second branch: for `leather jacket` the first pick was a $75 bomber, above
-typical, with no price limit. The loop searched again under the $40 median and
-switched to a $33 shacket, which is not leather. For `cardigan` nothing cheaper
-matched, so it kept the first pick.
+Second branch, `leather jacket`: the $75 bomber was above typical with no price
+limit, so the loop searched under the $40 median and switched to a $33 shacket.
+I realised the cost: the shacket is not leather.
 
 ```
 $ python app.py ask 'leather jacket'
   Found:    Shacket — Olive Canvas — $33.0 on poshmark
-  Price:    below typical ($33.0 vs a median of $42.0 across 7 other outerwear)
   Branch:   switched to a cheaper pick (first pick: 90s Leather Bomber — Black, $75.0)
-  ...
-
-$ python app.py ask 'cardigan'
-  Found:    Knit Cardigan — Chunky Brown — $35.0 on depop
-  Price:    above typical ($35.0 vs a median of $20.5 across 14 other tops)
-  Branch:   no cheaper match, kept the first pick
   ...
 ```
 
-Style memory: both runs use an empty wardrobe. Run 1 saves the carpenter
-jeans. Run 2 loads them, and both outfits use them. The model also named a
-hoodie and boots the wardrobe does not hold.
+Style memory, empty wardrobe both times: run 1 saved the carpenter jeans, and
+run 2 built both outfits around them.
 
 ```
 $ python app.py ask 'baggy carpenter jeans' --empty-wardrobe --remember
-(style memory: 0 saved item(s) added to the wardrobe)
-  Found:    Baggy Carpenter Jeans — Dark Wash — $36.0 on depop
-  Outfit:   At $36, these dark wash carpenter jeans are a versatile streetwear staple. ...
   Saved to style memory: Baggy Carpenter Jeans — Dark Wash
 
 $ python app.py ask 'vintage band tee' --empty-wardrobe --remember
 (style memory: 1 saved item(s) added to the wardrobe)
-  Found:    Vintage Band Tee — Faded Grey — $19.0 on depop
   Outfit:   Outfit 1: Effortless 90s Streetwear
-  - Top: Vintage Band Tee (Faded Grey)
   - Bottoms: Baggy Carpenter Jeans (Dark Wash)
   ...
-  Outfit 2: Grungy Casual
-  - Top: Vintage Band Tee (Faded Grey)
-  - Bottoms: Baggy Carpenter Jeans (Dark Wash)
-  ...
-  Saved to style memory: Vintage Band Tee — Faded Grey
 ```
 
-These blocks are trimmed to the relevant lines (`...` marks a cut). The
-commands reproduce the full output. `python app.py forget` clears the memory
-file, `.fitfindr_memory.json`, which git ignores.
+Trimmed to the relevant lines. `python app.py forget` clears the memory.
 
 ## How I Used AI
 
-### Moment 1
-
-What I asked for: Before writing the search tool, I asked Codex to find
-size formats in the listings that would break a substring check.
-
-What came back: `S/M`, `M/L`, `W30`, `US 8` and `US 8.5`. A substring
-check would match size 8 to `US 8.5` and mix clothing sizes with shoe sizes.
-
-What I changed: I wrote separate rules for clothing ranges, waist sizes
-and shoe sizes. Size 8 now returns only the `US 8` sneakers, and `W30` returns
-the W30 jeans.
-
-### Moment 2
-
-What I asked for: I asked Codex how a test could prove the item search
-picked is the same item `suggest_outfit` received.
-
-What came back: Reading the outfit text cannot prove it, because the model
-paraphrases. The session needs a record of the exact input.
-
-What I changed: I added `session["outfit_input_item"]`, copied from
-`selected_item` right before the call, so criterion 3 can compare the two ids.
-
-### Moment 3
-
-What I asked for: I asked Claude to build the three stretch features, with
-the README declaration committed before any code.
-
-What came back: When I tested the second search without a category
-filter, `leather jacket` under $40 returned a leather belt first.
-
-What I changed: The second search keeps only results in the same category
-as the first pick, so the switch is from one jacket to another.
-
-### Moment 4 (Unit 4)
-
-What I asked for: I asked Claude to score each try in code instead of by eye,
-one check per criterion in `checks.py`.
-
-What came back: all 25 tries passed, so the run log showed nothing to diagnose.
-Counting price formats across the fit cards found 12 of 20 with $45.0, which my
-criterion 4 check accepts.
-
-What I changed: I added `measure.py` for that count and made the price format
-my improvement, measured with it before and after.
+1. I asked Codex which size formats in the listings would break a substring
+   check. It found `S/M`, `W30`, `US 8` and `US 8.5`. I wrote separate rules for
+   clothing, waist and shoe sizes, so size 8 no longer matches `US 8.5`.
+2. I asked Codex how a test could prove the searched item reached
+   `suggest_outfit`. It said the outfit text cannot prove it, because the model
+   paraphrases. I added `session["outfit_input_item"]` so criterion 3 compares
+   two ids.
+3. I asked Claude to build the Unit 3 stretch features. Testing the second
+   search without a category filter, `leather jacket` returned a leather belt
+   first, so I kept that search to the same category.
+4. In Unit 4 I asked Claude to score every try in code, one check per
+   criterion. All 25 passed. Counting price formats then found 12 of 20 fit
+   cards with $45.0, which became my improvement.
 
 # Unit 4: Testing
 
 ![How the agent decides each step](docs/decisions.svg)
-
-I drew this to show every decision the loop makes this unit and the
-condition that takes it.
 
 ## Unit 4 Stretch Features
 
@@ -289,8 +218,8 @@ I declared these three before I built them.
 
 ## Run Log: Before
 
-Produced by `run_eval.py::main`, five tries per criterion, cache off. Each try
-is scored by `checks.py::check`. Raw file: `results/run_2026-10-11_2303_before.md`.
+From `run_eval.py::main`, scored by `checks.py::check`, cache off. Raw file:
+`results/run_2026-10-11_2303_before.md`.
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
@@ -300,7 +229,7 @@ is scored by `checks.py::check`. Raw file: `results/run_2026-10-11_2303_before.m
 | 4. fit card is short with price and platform | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 | 5. price ceiling is respected | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-Real output, one try per criterion, from `results/run_2026-10-11_2303_before.md`:
+One try per criterion:
 
 ```
 1  vintage graphic tee under $30   PASS, search, outfit and fit card all returned
@@ -315,58 +244,26 @@ Real output, one try per criterion, from `results/run_2026-10-11_2303_before.md`
 
 ## Verdicts and Diagnoses
 
-| # | Criterion | Target | Verdict | How I decided |
-|---|---|---|---|---|
-| 1 | Matching query completes all three tools | 4 of 5 | MET (5/5) | Every try returned an outfit and a fit card, none a fallback message. |
-| 2 | Impossible query stops before tool 2 | 5 of 5 | MET (5/5) | Every try set `error`, never set `outfit_input_item`, and the message names description, size and price. |
-| 3 | Selected item survives the handoff | 5 of 5 | MET (5/5) | The two ids matched on five different queries, including `leather jacket`, where branch 2 changed the pick. |
-| 4 | Fit card is short with price and platform | 4 of 5 | MET (5/5) | Two or three sentences each, with the price and platform. |
-| 5 | Price ceiling is respected | 5 of 5 | MET (5/5) | Every pick was at or under the parsed limit. |
+| # | Verdict | How I decided | Tighter target I would set |
+|---|---|---|---|
+| 1 | MET (5/5) | outfit and fit card every try | 5 of 5 over five different queries |
+| 2 | MET (5/5) | stopped before `suggest_outfit` every try | five different impossible queries |
+| 3 | MET (5/5) | ids matched, including the branch 2 switch | also check the pick against `search_results[0]` |
+| 4 | MET (5/5) | 2 to 3 sentences, price and platform | 5 of 5, price written as $45 not $45.0 |
+| 5 | MET (5/5) | every pick under the limit | include queries where branch 2 runs |
 
-I revised no criteria.
+I revised no criteria. I thought 25 of 25 meant the agent worked. Then I
+realised my targets were too easy, so I looked for what they missed:
 
-I thought 25 of 25 meant the agent worked. Then I realised it meant my targets
-were too easy, so there is no miss to diagnose. Criteria 2, 3 and 5 are decided by code with no model in the path, so
-they could only fail on a bug. I would tighten them like this:
-
-- 1: 5 of 5, over five different queries instead of one.
-- 2: 5 of 5 over five different impossible queries, and the message says which
-  constraint the retry dropped.
-- 3: also check `selected_item` against `search_results[0]` when branch 2 does
-  not run, so a wrong pick cannot pass.
-- 4: 5 of 5, and the price reads like a price tag: $45, not $45.0.
-- 5: include queries where branch 2 runs, so the second search is also held to
-  the user's limit.
-
-The tightened criterion 4 points at a real failure the original one passed.
-
-### Failure the criteria missed: prices printed as $45.0
-
-I found it by counting price formats in the before log with `measure.py`:
-
-```
-results/run_2026-10-11_2303_before.md
-  fit cards with a price like $45.0: 12 of 20
-  outfits with markdown stars:       20 of 20
-```
-
-Place: the model's output, caused by a tool. Mechanism:
-`tools.py::_item_summary` wrote the price straight from the float, so the
-prompt said `$45.0`. The fit card prompt asks for the exact price, so the model
-copied it. My check accepts `$45.0` as the price, which is why criterion 4
-passed.
-
-### Second one: markdown in every outfit
-
-I found markdown stars in 20 of 20 outfits, and they print raw in the
-terminal. Place: the model's output. Mechanism: the
-`suggest_outfit` prompt never asked for plain text, and the model defaults to
-markdown.
+- Prices printed as $45.0 in 12 of 20 fit cards. Place: the model output.
+  Mechanism: `tools.py::_item_summary` passed the float price into the prompt,
+  and the prompt asks for the exact price. My criterion 4 check accepted it.
+- Markdown stars in 20 of 20 outfits. Place: the model output. Mechanism: the
+  `suggest_outfit` prompt never asked for plain text.
 
 ## Loop Trace
 
-Happy path, `python app.py ask '90s track jacket in size M' --trace`. Both MCP
-calls are marked.
+`python app.py ask '90s track jacket in size M' --trace`
 
 ```
 [1] parse_query
@@ -386,8 +283,8 @@ calls are marked.
       out: Unearthed this authentic 90s Champion track jacket and I'm obsessed with the navy and white sleeve detailing. …
 ```
 
-Empty search, `python app.py ask 'designer ballgown size XXS under $5' --trace`.
-It is shorter because it stops after search.
+`python app.py ask 'designer ballgown size XXS under $5' --trace` stops after
+search:
 
 ```
 [1] parse_query
@@ -403,15 +300,12 @@ It is shorter because it stops after search.
       →    branch 1: empty, stopping before suggest_outfit
 ```
 
-On the MCP move: `mcp_server.py` registers `search_listings`, and
-`agent.py::_search` calls it with `mcp_client.call_tool`. I thought the move
-might change what search returns. I checked, and the MCP call and the direct
-call return the same list for the same inputs. Nothing behaved differently. The cost is time: a search through MCP took 0.43 s against
-0.001 s direct, because each call starts the server.
+MCP move: `search_listings` is registered in `mcp_server.py` and called through
+`mcp_client.call_tool` in `agent.py::_search`. I checked that it returns the
+same list as the direct call. The only change I found is time: 0.43 s per
+search against 0.001 s, because each call starts the server.
 
 ## Failure Modes
-
-All three triggered on purpose:
 
 ```
 Empty search:
@@ -424,16 +318,13 @@ Model unavailable (one character of the key changed for one run, new query):
   I found Corduroy Wide-Leg Pants — Rust ($32.0 on depop), but the styling model couldn't be reached, so I couldn't write the outfit or fit card. The model rejected your API key. Check GEMINI_API_KEY in your .env file, or create a fresh key at aistudio.google.com. Then try again.
 ```
 
-The model-unavailable message comes from `agent.py::_model_down`, which catches
-`ModelUnavailable` and stops with the item it already found. A failed MCP call
-is caught the same way.
+For the bad key I changed one character for one run. `agent.py::_model_down`
+catches `ModelUnavailable` and keeps the item it found.
 
 ## The Improvement
 
-What I changed: `tools.py::_price_text` formats prices as $45 for whole
-dollars before they go into the prompts.
-
-Which failure it was meant to fix: fit cards printing $45.0.
+I changed `tools.py::_price_text` so prompts get $45, not $45.0. It targets the
+$45.0 fit cards.
 
 ### Run Log: After
 
@@ -447,24 +338,9 @@ Raw file: `results/run_2026-10-11_2306_after.md`.
 | 4. fit card is short with price and platform | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 | 5. price ceiling is respected | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
-Did it help: yes, on the failure it targeted. All five criteria stayed at 5/5,
-so the run log alone could not show it. I measured it with `measure.py`:
-
-```
-results/run_2026-10-11_2306_after.md
-  fit cards with a price like $45.0: 0 of 20
-  outfits with markdown stars:       20 of 20
-```
-
-$45.0 went from 12 of 20 fit cards to 0 of 20. Markdown is unchanged, as
-expected.
-
 ### Second Improvement (stretch)
 
-What I changed: both `suggest_outfit` prompts now ask for plain text with no
-markdown.
-
-Raw file: `results/run_2026-10-11_2308_second.md`.
+I asked `suggest_outfit` for plain text. Raw file: `results/run_2026-10-11_2308_second.md`.
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
@@ -474,21 +350,23 @@ Raw file: `results/run_2026-10-11_2308_second.md`.
 | 4. fit card is short with price and platform | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 | 5. price ceiling is respected | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
+Both helped. The criteria stayed at 5/5, so I measured the two failures
+directly:
+
 ```
+$ python measure.py <before> <after> <second>
+results/run_2026-10-11_2303_before.md
+  fit cards with a price like $45.0: 12 of 20
+  outfits with markdown stars:       20 of 20
+results/run_2026-10-11_2306_after.md
+  fit cards with a price like $45.0: 0 of 20
+  outfits with markdown stars:       20 of 20
 results/run_2026-10-11_2308_second.md
   fit cards with a price like $45.0: 0 of 20
   outfits with markdown stars:       0 of 20
 ```
 
-It helped. I found markdown in 0 of 20 outfits, down from 20 of 20, and every
-criterion held at 5/5.
-
-### Other stretch features
-
-Second tool on MCP: `compare_price`. It is the `compare_price (via MCP)` step in
-the happy-path trace.
-
-Retry with looser constraints, `python app.py ask 'leather bomber size S' --trace`:
+Second MCP tool: `compare_price`, step 3 in the trace above. Retry:
 
 ```
 [1] parse_query
@@ -503,19 +381,11 @@ Retry with looser constraints, `python app.py ask 'leather bomber size S' --trac
       out: 4 items: 90s Leather Bomber — Black, Leather Belt — Brown, Braided, Mini Shoulder Bag — Tan Leather … +1 more
 ```
 
-The CLI prints `Retry: nothing matched, so I searched again without the size S`.
-
 ## What's Still Broken
 
-Nothing in my five criteria is missed. What my criteria do not check:
-
-- The model still names clothes the wardrobe does not hold, even though the
-  prompt says not to. I would add a criterion that every piece named is in the
-  wardrobe. I stopped because it needs a fuzzy name match I have not built.
-- The retry can return an item in the wrong size, as `leather bomber size S`
-  does. The message says the size was dropped, but nothing asks the user first.
-- Each MCP call starts a new server process. That is fine for one user and slow
-  for many.
+- The model still names clothes the wardrobe does not hold. I stopped because
+  checking it needs fuzzy name matching I have not built.
+- The retry can return the wrong size. It says so, but does not ask first.
 
 ## Running the Project
 
