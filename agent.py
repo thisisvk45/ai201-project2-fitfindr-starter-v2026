@@ -17,7 +17,8 @@ import re
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card, compare_price
+from tools import suggest_outfit, create_fit_card, compare_price
+from mcp_client import call_tool
 from generate import ModelUnavailable
 import memory
 
@@ -89,7 +90,7 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
 
         if next_step == "search":
             parsed = session["parsed"]
-            session["search_results"] = search_listings(
+            session["search_results"] = _search(
                 parsed["description"], parsed["size"], parsed["max_price"]
             )
 
@@ -115,7 +116,7 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                 and session["parsed"]["max_price"] is None
             ):
                 cheaper = [
-                    item for item in search_listings(
+                    item for item in _search(
                         session["parsed"]["description"],
                         session["parsed"]["size"],
                         session["price_check"]["median_price"],
@@ -150,6 +151,15 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
     if remember:
         session["remembered_item"] = memory.remember_item(session["selected_item"])
     return session
+
+
+def _search(description: str, size, max_price) -> list[dict]:
+    """search_listings, called through the MCP server in mcp_server.py."""
+    return call_tool("search_listings", {
+        "description": description,
+        "size": size,
+        "max_price": max_price,
+    })
 
 
 def _parse_query(query: str) -> dict:
