@@ -358,8 +358,8 @@ passed.
 
 ### Second one: markdown in every outfit
 
-20 of 20 outfits contained `**`,
-which prints raw in the terminal. Place: the model's output. Mechanism: the
+I found markdown stars in 20 of 20 outfits, and they print raw in the
+terminal. Place: the model's output. Mechanism: the
 `suggest_outfit` prompt never asked for plain text, and the model defaults to
 markdown.
 
