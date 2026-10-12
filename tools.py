@@ -131,12 +131,12 @@ def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
 The user already owns:
 {closet}
 
-Name the exact wardrobe pieces that work with the find. Keep the answer under 120 words and do not invent items."""
+Name the exact wardrobe pieces that work with the find. Keep the answer under 120 words and do not invent items. Write plain text with no markdown: no asterisks, no headings."""
     else:
         prompt = f"""You are a practical personal stylist. Give one or two general styling ideas for this potential thrift find:
 {item_summary}
 
-The user has not listed any wardrobe items, so do not claim they own specific pieces. Suggest broadly available pairings. Keep the answer under 120 words."""
+The user has not listed any wardrobe items, so do not claim they own specific pieces. Suggest broadly available pairings. Keep the answer under 120 words. Write plain text with no markdown: no asterisks, no headings."""
 
     response = generate(prompt).strip()
     return response or "No outfit suggestion was returned. Try the item again."
