@@ -17,7 +17,7 @@ import re
 
 import config
 import trace
-from tools import suggest_outfit, create_fit_card, compare_price
+from tools import suggest_outfit, create_fit_card
 from mcp_client import call_tool
 from generate import ModelUnavailable
 import memory
@@ -107,7 +107,7 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
 
         if next_step == "compare_price":
             pick = session["selected_item"]
-            session["price_check"] = compare_price(pick)
+            session["price_check"] = _compare(pick)
 
             # Second branch: the first pick is above typical for its category
             # and the user set no price limit, so look for a cheaper match.
@@ -126,7 +126,7 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                 if cheaper:
                     session["original_pick"] = pick
                     session["selected_item"] = cheaper[0]
-                    session["price_check"] = compare_price(cheaper[0])
+                    session["price_check"] = _compare(cheaper[0])
                     session["price_branch"] = "switched to a cheaper pick"
                 else:
                     session["price_branch"] = "no cheaper match, kept the first pick"
@@ -160,6 +160,11 @@ def _search(description: str, size, max_price) -> list[dict]:
         "size": size,
         "max_price": max_price,
     })
+
+
+def _compare(item: dict) -> dict:
+    """compare_price, called through the MCP server in mcp_server.py."""
+    return call_tool("compare_price", {"new_item": item})
 
 
 def _parse_query(query: str) -> dict:
