@@ -258,6 +258,18 @@ filter, `leather jacket` under $40 returned a leather belt first.
 What I changed: The second search keeps only results in the same category
 as the first pick, so the switch is from one jacket to another.
 
+# Unit 4: Testing
+
+## Unit 4 Stretch Features
+
+I declared these three before I built them.
+
+1. A second tool on MCP: `compare_price`, alongside `search_listings`.
+2. Retry with looser constraints: when a search with a size comes back empty,
+   the loop searches once more without the size and says it dropped the size.
+3. A second improvement from my diagnosis, measured with a third run log in
+   the same format.
+
 ## Running the Project
 
 ```
