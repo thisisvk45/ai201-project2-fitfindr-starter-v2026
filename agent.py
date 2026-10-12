@@ -53,6 +53,7 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "price_branch": None,        # what the second branch did, if it ran
         "original_pick": None,       # first pick, kept when the branch switches
         "remembered_item": None,     # what style memory saved after this run
+        "retry_dropped": None,       # constraint dropped by the empty-search retry
     }
 
 
@@ -105,13 +106,28 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                            note="MCP call failed, stopping")
                 return session
 
+            # Retry (stretch): an empty search with a size gets one more try
+            # without the size, and the session records what was dropped.
+            if not session["search_results"] and parsed["size"] and not session["retry_dropped"]:
+                trace.step("search_listings (via MCP)", inputs=_args(parsed),
+                           returned=session["search_results"],
+                           note=f"empty with size {parsed['size']}, retrying without it")
+                session["retry_dropped"] = f"size {parsed['size']}"
+                parsed = {**parsed, "size": None}
+                session["search_results"] = _search(
+                    parsed["description"], None, parsed["max_price"]
+                )
+
             if not session["search_results"]:
                 trace.step("search_listings (via MCP)", inputs=_args(parsed),
                            returned=session["search_results"],
                            note="branch 1: empty, stopping before suggest_outfit")
+                tried = (f" I also tried without the {session['retry_dropped']}."
+                         if session["retry_dropped"] else "")
                 session["error"] = (
-                    "I couldn't find a listing that fits those details. Try broadening "
-                    "the description, choosing another size, or raising the price limit."
+                    "I couldn't find a listing that fits those details." + tried +
+                    " Try broadening the description, choosing another size, or "
+                    "raising the price limit."
                 )
                 return session
 
@@ -134,9 +150,8 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                 and session["parsed"]["max_price"] is None
             ):
                 limit = session["price_check"]["median_price"]
-                found = _search(
-                    session["parsed"]["description"], session["parsed"]["size"], limit
-                )
+                size = None if session["retry_dropped"] else session["parsed"]["size"]
+                found = _search(session["parsed"]["description"], size, limit)
                 cheaper = [
                     item for item in found
                     if item["category"] == pick["category"] and item["id"] != pick["id"]
@@ -148,7 +163,7 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                 else:
                     session["price_branch"] = "no cheaper match, kept the first pick"
                 trace.step("search_listings (via MCP)",
-                           inputs=_args({**session["parsed"], "max_price": limit}),
+                           inputs=_args({**session["parsed"], "size": size, "max_price": limit}),
                            returned=cheaper,
                            note=f"branch 2: above typical, {session['price_branch']}")
                 if cheaper:

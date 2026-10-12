@@ -126,6 +126,8 @@ def _ask_one(query, wardrobe, use_trace, remember=False):
     else:
         item = session["selected_item"] or {}
         print(f"  Found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
+        if session.get("retry_dropped"):
+            print(f"  Retry:    nothing matched, so I searched again without the {session['retry_dropped']}")
         check = session.get("price_check")
         if check:
             print(
