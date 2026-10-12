@@ -33,11 +33,12 @@ import datetime as dt
 import sys
 import traceback
 
+import checks
 import config
 import scenarios as scenario_module
 
 
-def run_once(scenario, use_trace=True):
+def run_once(scenario, attempt=1, use_trace=True):
     """One scenario, one try. Returns everything worth recording."""
     from agent import run_agent
     from utils.data_loader import get_example_wardrobe, get_empty_wardrobe
@@ -50,9 +51,10 @@ def run_once(scenario, use_trace=True):
     if use_trace:
         trace_module.start_trace()
 
-    record = {"error": None, "session": None, "trace": "", "crashed": None}
+    query = scenario_module.query_for(scenario, attempt)
+    record = {"error": None, "session": None, "trace": "", "crashed": None, "query": query}
     try:
-        record["session"] = run_agent(scenario["query"], wardrobe)
+        record["session"] = run_agent(query, wardrobe)
     except Exception as exc:  # noqa: BLE001 — a crash is a result worth logging
         record["crashed"] = f"{type(exc).__name__}: {exc}"
         record["traceback"] = traceback.format_exc()
@@ -60,6 +62,11 @@ def run_once(scenario, use_trace=True):
     if use_trace:
         record["trace"] = trace_module.get_trace()
 
+    number = scenario.get("criterion")
+    if number:
+        record["passed"], record["reason"] = checks.check(
+            number, None if record["crashed"] else record["session"]
+        )
     return record
 
 
@@ -91,11 +98,11 @@ def main():
     rows = []
     for scenario in scenario_module.SCENARIOS:
         print(f"{scenario['name']}  ({scenario['wardrobe']} wardrobe)")
-        print(f"  query: {scenario['query']}")
+        print(f"  query: {scenario.get('query') or ' / '.join(scenario['queries'])}")
 
         tries = []
         for attempt in range(1, args.tries + 1):
-            record = run_once(scenario)
+            record = run_once(scenario, attempt)
             tries.append(record)
 
             if record["crashed"]:
@@ -107,6 +114,8 @@ def main():
                 else:
                     card = (session.get("fit_card") or "")
                     print(f"  try {attempt}: completed — fit card {len(card)} chars")
+            if "passed" in record:
+                print(f"           {'PASS' if record['passed'] else 'FAIL'} — {record['reason']}")
 
         rows.append({"scenario": scenario, "tries": tries})
         print()
@@ -133,10 +142,6 @@ def write_report(rows, args):
         f"- Temperature: {config.TEMPERATURE}",
         f"- When: {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}",
         "",
-        "Paste the table below into your README. Fill in the Criterion and",
-        "Target columns from `criteria.md`, then mark each try PASS or FAIL",
-        "from the output underneath and count them for the Verdict.",
-        "",
         f"| Criterion | Target | {headers} | Verdict |",
         f"|---|---|{divider}|---|",
     ]
@@ -152,14 +157,20 @@ def write_report(rows, args):
             if number
             else f"{scenario['name']} _(diagnostic — not one of your five)_"
         )
-        lines.append(f"| {label_text} |  | {' | '.join([' '] * n)} |  |")
+        if number:
+            cells = ["PASS" if r.get("passed") else "FAIL" for r in row["tries"]]
+            passes = cells.count("PASS")
+            need = checks.TARGETS[number]
+            verdict = f"{'MET' if passes >= need else 'MISSED'} ({passes}/{n})"
+            target = f"{need} of 5"
+        else:
+            cells, verdict, target = [" "] * n, "", ""
+        lines.append(f"| {label_text} | {target} | {' | '.join(cells)} | {verdict} |")
 
     lines += [
         "",
-        "> The Try and Verdict columns are blank on purpose. Whether a try",
-        "> passed depends on the criterion you wrote, so it's yours to decide.",
-        "> Count the passes, then read that count against your target: a row",
-        "> targeting 4 of 5 with three PASS cells is MISSED (3/5).",
+        "> PASS and FAIL come from `checks.py::check`, one function per",
+        "> criterion in criteria.md. The reason for each is under its try.",
         "",
         "---",
         "",
@@ -173,12 +184,13 @@ def write_report(rows, args):
     for row in rows:
         scenario = row["scenario"]
         lines += [f"### {scenario['name']}", "",
-                  f"- Query: `{scenario['query']}`",
                   f"- Wardrobe: {scenario['wardrobe']}", ""]
 
         for i, record in enumerate(row["tries"], 1):
-            lines.append(f"**Try {i}**")
+            lines.append(f"**Try {i}**: `{record['query']}`")
             lines.append("")
+            if "passed" in record:
+                lines += [f"- check: {'PASS' if record['passed'] else 'FAIL'}, {record['reason']}"]
 
             if record["crashed"]:
                 lines += ["Crashed:", "", "```", record["crashed"], "```", ""]
