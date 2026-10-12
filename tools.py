@@ -301,11 +301,19 @@ def _size_matches(requested: str, available: str) -> bool:
     return wanted == offered_compact
 
 
+def _price_text(price) -> str:
+    """How a price tag reads: $45 for whole dollars, $45.50 otherwise."""
+    if price is None:
+        return "price unknown"
+    price = float(price)
+    return f"${price:.0f}" if price.is_integer() else f"${price:.2f}"
+
+
 def _item_summary(item: dict) -> str:
     """A stable, complete listing description for the two model prompts."""
     brand = item.get("brand") or "unbranded"
     return (
-        f"{item.get('title', 'Unnamed item')} — ${item.get('price', 'unknown')} "
+        f"{item.get('title', 'Unnamed item')} — {_price_text(item.get('price'))} "
         f"on {item.get('platform', 'unknown platform')}; size {item.get('size', 'unknown')}; "
         f"{item.get('condition', 'unknown')} condition; brand: {brand}; "
         f"colors: {', '.join(item.get('colors', []))}; "
