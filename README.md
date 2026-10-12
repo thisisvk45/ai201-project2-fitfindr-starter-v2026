@@ -272,6 +272,11 @@ my improvement, measured with it before and after.
 
 # Unit 4: Testing
 
+![How the agent decides each step](docs/decisions.svg)
+
+I drew this to show every decision the loop makes this unit and the
+condition that takes it.
+
 ## Unit 4 Stretch Features
 
 I declared these three before I built them.
@@ -320,8 +325,8 @@ Real output, one try per criterion, from `results/run_2026-10-11_2303_before.md`
 
 I revised no criteria.
 
-There were no misses, so there is nothing to diagnose as a miss. My targets were
-too low. Criteria 2, 3 and 5 are decided by code with no model in the path, so
+I thought 25 of 25 meant the agent worked. Then I realised it meant my targets
+were too easy, so there is no miss to diagnose. Criteria 2, 3 and 5 are decided by code with no model in the path, so
 they could only fail on a bug. I would tighten them like this:
 
 - 1: 5 of 5, over five different queries instead of one.
@@ -337,7 +342,7 @@ The tightened criterion 4 points at a real failure the original one passed.
 
 ### Failure the criteria missed: prices printed as $45.0
 
-I ran `measure.py` on the before log:
+I found it by counting price formats in the before log with `measure.py`:
 
 ```
 results/run_2026-10-11_2303_before.md
@@ -399,9 +404,9 @@ It is shorter because it stops after search.
 ```
 
 On the MCP move: `mcp_server.py` registers `search_listings`, and
-`agent.py::_search` calls it with `mcp_client.call_tool`. I checked that the
-MCP call and the direct call return the same list for the same inputs. Nothing
-behaved differently. The cost is time: a search through MCP took 0.43 s against
+`agent.py::_search` calls it with `mcp_client.call_tool`. I thought the move
+might change what search returns. I checked, and the MCP call and the direct
+call return the same list for the same inputs. Nothing behaved differently. The cost is time: a search through MCP took 0.43 s against
 0.001 s direct, because each call starts the server.
 
 ## Failure Modes
@@ -443,7 +448,7 @@ Raw file: `results/run_2026-10-11_2306_after.md`.
 | 5. price ceiling is respected | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
 
 Did it help: yes, on the failure it targeted. All five criteria stayed at 5/5,
-so the run log could not show a change. `measure.py` did:
+so the run log alone could not show it. I measured it with `measure.py`:
 
 ```
 results/run_2026-10-11_2306_after.md
@@ -475,8 +480,8 @@ results/run_2026-10-11_2308_second.md
   outfits with markdown stars:       0 of 20
 ```
 
-It helped: markdown went from 20 of 20 outfits to 0 of 20, and every criterion
-held at 5/5.
+It helped. I found markdown in 0 of 20 outfits, down from 20 of 20, and every
+criterion held at 5/5.
 
 ### Other stretch features
 
