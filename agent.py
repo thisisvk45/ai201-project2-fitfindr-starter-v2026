@@ -18,7 +18,7 @@ import re
 import config
 import trace
 from tools import suggest_outfit, create_fit_card
-from mcp_client import call_tool
+from mcp_client import call_tool, MCPError
 from generate import ModelUnavailable
 import memory
 
@@ -69,18 +69,20 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                   (style memory, see memory.py).
 
     Returns:
-        The session dict. If session["error"] is set, the search was empty and
-        the run stopped before suggest_outfit.
+        The session dict. If session["error"] is set, the run stopped early:
+        an empty search, the search service failing, or the model being
+        unreachable. Later fields stay None.
 
     Steps: search_listings, then compare_price, then suggest_outfit, then
     create_fit_card. Branch 1: an empty search stops the run. Branch 2: a pick
     that is above typical, with no price limit, triggers a second search under
-    the category median.
+    the category median. search_listings and compare_price go through MCP.
     """
     if remember:
         wardrobe = memory.with_memory(wardrobe)
     session = new_session(query, wardrobe)
     session["parsed"] = _parse_query(query)
+    trace.step("parse_query", inputs=query, returned=_args(session["parsed"]))
 
     next_step = "search"
     iterations = 0
@@ -90,17 +92,31 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
 
         if next_step == "search":
             parsed = session["parsed"]
-            session["search_results"] = _search(
-                parsed["description"], parsed["size"], parsed["max_price"]
-            )
+            try:
+                session["search_results"] = _search(
+                    parsed["description"], parsed["size"], parsed["max_price"]
+                )
+            except MCPError as exc:
+                session["error"] = (
+                    "The listings search service didn't respond, so I couldn't search. "
+                    "Check that `python mcp_server.py` starts without an error, then try again."
+                )
+                trace.step("search_listings (via MCP)", inputs=_args(parsed), returned=str(exc),
+                           note="MCP call failed, stopping")
+                return session
 
             if not session["search_results"]:
+                trace.step("search_listings (via MCP)", inputs=_args(parsed),
+                           returned=session["search_results"],
+                           note="branch 1: empty, stopping before suggest_outfit")
                 session["error"] = (
                     "I couldn't find a listing that fits those details. Try broadening "
                     "the description, choosing another size, or raising the price limit."
                 )
                 return session
 
+            trace.step("search_listings (via MCP)", inputs=_args(parsed),
+                       returned=session["search_results"])
             session["selected_item"] = session["search_results"][0]
             next_step = "compare_price"
             continue
@@ -108,6 +124,8 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
         if next_step == "compare_price":
             pick = session["selected_item"]
             session["price_check"] = _compare(pick)
+            trace.step("compare_price (via MCP)", inputs=pick,
+                       returned=_price_summary(session["price_check"]))
 
             # Second branch: the first pick is above typical for its category
             # and the user set no price limit, so look for a cheaper match.
@@ -115,42 +133,85 @@ def run_agent(query: str, wardrobe: dict, remember: bool = False) -> dict:
                 session["price_check"]["verdict"] == "above typical"
                 and session["parsed"]["max_price"] is None
             ):
+                limit = session["price_check"]["median_price"]
+                found = _search(
+                    session["parsed"]["description"], session["parsed"]["size"], limit
+                )
                 cheaper = [
-                    item for item in _search(
-                        session["parsed"]["description"],
-                        session["parsed"]["size"],
-                        session["price_check"]["median_price"],
-                    )
+                    item for item in found
                     if item["category"] == pick["category"] and item["id"] != pick["id"]
                 ]
                 if cheaper:
                     session["original_pick"] = pick
                     session["selected_item"] = cheaper[0]
-                    session["price_check"] = _compare(cheaper[0])
                     session["price_branch"] = "switched to a cheaper pick"
                 else:
                     session["price_branch"] = "no cheaper match, kept the first pick"
+                trace.step("search_listings (via MCP)",
+                           inputs=_args({**session["parsed"], "max_price": limit}),
+                           returned=cheaper,
+                           note=f"branch 2: above typical, {session['price_branch']}")
+                if cheaper:
+                    session["price_check"] = _compare(cheaper[0])
+                    trace.step("compare_price (via MCP)", inputs=cheaper[0],
+                               returned=_price_summary(session["price_check"]))
 
             next_step = "suggest_outfit"
             continue
 
         if next_step == "suggest_outfit":
             session["outfit_input_item"] = session["selected_item"]
-            session["outfit_suggestion"] = suggest_outfit(
-                session["outfit_input_item"], session["wardrobe"]
-            )
+            try:
+                session["outfit_suggestion"] = suggest_outfit(
+                    session["outfit_input_item"], session["wardrobe"]
+                )
+            except ModelUnavailable as exc:
+                return _model_down(session, "suggest_outfit", exc)
+            trace.step("suggest_outfit",
+                       inputs=f"new_item={session['outfit_input_item']['title']!r}, "
+                              f"wardrobe={len(session['wardrobe'].get('items', []))} items",
+                       returned=session["outfit_suggestion"])
             next_step = "create_fit_card"
             continue
 
         if next_step == "create_fit_card":
-            session["fit_card"] = create_fit_card(
-                session["outfit_suggestion"], session["selected_item"]
-            )
+            try:
+                session["fit_card"] = create_fit_card(
+                    session["outfit_suggestion"], session["selected_item"]
+                )
+            except ModelUnavailable as exc:
+                return _model_down(session, "create_fit_card", exc)
+            trace.step("create_fit_card",
+                       inputs=f"outfit=<from session>, new_item={session['selected_item']['title']!r}",
+                       returned=session["fit_card"])
             next_step = None
 
     if remember:
         session["remembered_item"] = memory.remember_item(session["selected_item"])
+        trace.step("style memory", returned=session["remembered_item"]["name"],
+                   note="saved for the next --remember run")
     return session
+
+
+def _model_down(session: dict, tool: str, exc: Exception) -> dict:
+    """Stop with a message the user can act on when the model can't be reached."""
+    item = session["selected_item"] or {}
+    session["error"] = (
+        f"I found {item.get('title', 'a listing')} (${item.get('price')} on "
+        f"{item.get('platform')}), but the styling model couldn't be reached, so I "
+        f"couldn't write the outfit or fit card. {exc} Then try again."
+    )
+    trace.step(tool, returned=str(exc), note="model unavailable, stopping")
+    return session
+
+
+def _args(values: dict) -> str:
+    return ", ".join(f"{key}={value!r}" for key, value in values.items())
+
+
+def _price_summary(check: dict) -> str:
+    return (f"{check['verdict']}: ${check['item_price']} vs median "
+            f"${check['median_price']} ({check['compared_count']} compared)")
 
 
 def _search(description: str, size, max_price) -> list[dict]:
